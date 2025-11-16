@@ -102,11 +102,13 @@ async function generateRecommendations() {
         const courses = await response.json();
         console.log('[Debug 5] 课程数据加载成功，总数:', courses.length);
 
+        // 创建技能列表（在函数作用域内）
+        const skillsList = resumeText.toLowerCase().split(',').map(s => s.trim());
+        console.log('[Debug] 当前技能列表:', skillsList);
+
         // 筛选课程
         const filteredCourses = courses.filter(course => {
             const goal = careerGoal.toLowerCase();
-            const skillsList = resumeText.toLowerCase().split(',').map(s => s.trim());
-            console.log('[Debug] 当前技能列表:', skillsList);
 
             // 匹配逻辑
             const industryMatch = course.industry?.toLowerCase().includes(goal) || false;
