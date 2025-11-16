@@ -6,13 +6,13 @@
   "action": {
     "default_title": "CMU Course Assistant",
     "default_icon": {
-      "16": "images/icon-16.png",
-      "48": "images/icon-48.png",
-      "128": "images/icon-128.png"
+      "16": "images/icon-16.svg",
+      "48": "images/icon-48.svg",
+      "128": "images/icon-128.svg"
     }
   },
   "side_panel": {
-    "default_path": "src/index.html"
+    "default_path": "frontend/sidepanel.html"
   },
   "permissions": [
     "sidePanel",

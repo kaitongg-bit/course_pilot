@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Course Planner</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Ensuring the font is Inter and setting basic sidebar style */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            /* 关键点：将主体宽度固定在标准的侧边栏尺寸 (380px) */
+            width: 380px; 
+            margin: 0;
+            padding: 0;
+            background-color: #f8fafc; /* light gray background */
+            /* Crucial: Set body to full height to calculate scrollable content correctly */
+            height: 100vh; 
+            overflow: hidden; /* Prevent body scroll, content scrolls internally */
+        }
+        .scrollable-content {
+            /* Calculate height based on 100vh minus header/nav height (approx 110px) */
+            height: calc(100vh - 110px); 
+            overflow-y: auto;
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+        }
+        .modal-overlay {
+            /* 模态框背景层：位置固定在侧边栏内部 */
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%; /* Spans 380px */
+            height: 100%;
+            /* 半透明背景，用于模拟阻断交互 */
+            background-color: rgba(0, 0, 0, 0.5); 
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .course-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .course-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+        .course-card.expanded {
+            max-height: 500px;
+        }
+        .nav-tab.active-tab {
+            border-bottom: 2px solid #2563eb;
+            color: #2563eb;
+            border-bottom-width: 2px;
+        }
+        .nav-tab:not(.active-tab) {
+            border-bottom: 2px solid transparent;
+            color: #6b7280;
+        }
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body class="p-4">
+
+    <!-- Top Area: Navigation, Title, and Contribution Button -->
+    <div class="sticky top-0 bg-white z-20 border-b border-gray-200 pb-2">
+        <div class="flex justify-between items-center mb-2">
+            <h1 class="text-xl font-bold text-blue-700">AI Course Planner</h1>
+            <button id="contributeButton" class="text-xs font-semibold px-3 py-1 bg-green-500 text-white rounded-full hover:bg-green-600 transition shadow-md" onclick="changeView('contributionView')">
+                ✨ Contribute
+            </button>
+        </div>
+
+        <!-- Navigation Bar (Tabs) -->
+        <nav id="navBar" class="flex justify-between text-sm font-medium text-center text-gray-500 border-b border-gray-200">
+            <button class="nav-tab inline-block p-2 rounded-t-lg hover:text-blue-600 tab-active" 
+                    onclick="changeView('homeView')">
+                <span class="mr-1">💬</span> Dialogue
+            </button>
+            <button class="nav-tab inline-block p-2 rounded-t-lg hover:text-blue-600 tab-inactive" 
+                    onclick="changeView('searchView')">
+                <span class="mr-1">🔍</span> Search
+            </button>
+            <button class="nav-tab inline-block p-2 rounded-t-lg hover:text-blue-600 tab-inactive" 
+                    onclick="changeView('profileView')">
+                <span class="mr-1">👤</span> Profile
+            </button>
+        </nav>
+    </div>
+
+    <!-- Main Content Area: View Containers (Scrollable) -->
+    <div class="scrollable-content space-y-4 px-1">
+        
+        <!-- 1. Dialogue View (Home): Input & Recommendations -->
+        <div id="homeView" class="view-content">
+            <!-- Input Area -->
+            <section class="mb-6 p-4 bg-white rounded-xl shadow-lg border-t-4 border-yellow-500">
+                <h2 class="text-lg font-bold mb-3 text-gray-700">Your Goal & Skills Profile</h2>
+                
+                <label for="careerGoal" class="block text-sm font-medium text-gray-600 mb-1">Target Career (e.g., SWE Backend)</label>
+                <input type="text" id="careerGoal" placeholder="Enter target role..." class="w-full p-2 border border-gray-300 rounded-lg mb-3 focus:ring-blue-500 focus:border-blue-500">
+                
+                <label for="resumeInput" class="block text-sm font-medium text-gray-600 mb-1">Paste Resume/Skills (For AI Profile)</label>
+                <textarea id="resumeInput" rows="3" placeholder="Paste your resume text here to unlock advanced matching..." class="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 resize-none"></textarea>
+
+                <button onclick="generateRecommendations()" class="mt-4 w-full p-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition shadow-lg">
+                    🚀 Find My Custom Path
+                </button>
+            </section>
+
+            <!-- Recommendations (Starts Hidden) -->
+            <section id="recommendationSection" class="mb-6 hidden">
+                <h2 class="text-lg font-bold mb-3 text-gray-700">AI-Customized Course Recommendations</h2>
+                <div id="courseList" class="space-y-3">
+                    <!-- Recommendations will be injected here by JS -->
+                </div>
+            </section>
+        </div>
+
+        <!-- 2. Search View: Search Bar and Results -->
+        <div id="searchView" class="view-content hidden">
+            <h2 class="text-xl font-bold mb-4 text-gray-700">Search Course Reviews</h2>
+            <div class="p-4 bg-white rounded-xl shadow-lg mb-6">
+                <label for="courseSearch" class="block text-sm font-medium text-gray-600 mb-1">Search by Course Number (e.g., 15-745)</label>
+                <input type="text" id="courseSearch" placeholder="Enter course code..." class="w-full p-2 border border-gray-300 rounded-lg mb-3 focus:ring-blue-500 focus:border-blue-500">
+                <button onclick="searchCourses()" class="w-full p-3 bg-gray-600 text-white font-semibold rounded-xl hover:bg-gray-700 transition">
+                    Search & Quick View
+                </button>
+            </div>
+            <div id="searchResults" class="space-y-4">
+                <div class="p-3 mt-4 bg-blue-100 border border-blue-300 text-blue-800 rounded-lg text-sm text-center">
+                    Enter a course number above to instantly access its AI summary and all real student reviews.
+                </div>
+                <!-- Search results will be injected here -->
+            </div>
+        </div>
+
+        <!-- 3. Profile View: Badges and Contributions -->
+        <div id="profileView" class="view-content hidden">
+            <h2 class="text-xl font-bold mb-4 text-blue-700">My Contributor Profile</h2>
+            <div class="p-4 bg-white rounded-xl shadow-lg border-t-4 border-green-500">
+                <div class="p-4 bg-gray-50 rounded-lg mb-4">
+                    <p class="text-sm font-medium text-gray-600">Your Anonymous Contributor ID:</p>
+                    <p class="text-xs break-all mt-1" id="userIdDisplay">Loading...</p>
+                </div>
+                
+                <h3 class="text-lg font-semibold mb-3 text-gray-700">🎖️ My Badges</h3>
+                <div class="flex flex-wrap gap-2">
+                    <span class="px-3 py-1 bg-yellow-100 text-yellow-800 text-sm font-medium rounded-full">Insight Contributor</span>
+                    <span class="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full">Master Structurer</span>
+                    <span class="px-3 py-1 bg-gray-100 text-gray-500 text-sm font-medium rounded-full">Time & Effort Guru (Locked)</span>
+                </div>
+
+                <h3 class="text-lg font-semibold mt-6 mb-3 text-gray-700">📊 Contribution Impact</h3>
+                <div class="space-y-2">
+                    <div class="flex justify-between p-2 bg-blue-50 rounded-lg">
+                        <span class="text-sm">Total Reviews Submitted:</span>
+                        <span class="font-bold text-blue-600">0</span>
+                    </div>
+                    <div class="flex justify-between p-2 bg-green-50 rounded-lg">
+                        <span class="text-sm">Total Citations Received (Impact):</span>
+                        <span class="font-bold text-green-600">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. Contribution View: Integrated Review Form -->
+        <div id="contributionView" class="view-content hidden">
+            <h2 class="text-xl font-bold mb-4 text-green-700">Submit Your Course Experience</h2>
+            <div class="p-6 bg-white rounded-xl shadow-lg border-t-4 border-green-500">
+                 <p class="text-sm text-gray-600 mb-4">Earn <strong>Master Structurer</strong> badges by giving detailed insights below. Only the Course Number is mandatory.</p>
+                
+                <label for="reviewCourseCode" class="block text-sm font-medium text-gray-600 mb-1">Course Number to Review (e.g., 15-745)*</label>
+                <input type="text" id="reviewCourseCode" placeholder="Enter course code..." class="w-full p-2 border border-gray-300 rounded-lg mb-4 focus:ring-green-500 focus:border-green-500">
+                
+                <h3 class="text-md font-semibold mb-3 text-gray-700 border-b pb-1">Structured Insights (Help the AI Agent!)</h3>
+                
+                <div class="space-y-3 mb-6">
+                    <label class="block text-sm font-medium text-gray-600 mb-1">Workload (Hours per Week)</label>
+                    <select id="workload" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500">
+                        <option value="">Select workload...</option>
+                        <option value="5-10">5-10 hours</option>
+                        <option value="10-15">10-15 hours</option>
+                        <option value="15-20">15-20 hours</option>
+                        <option value="20+">20+ hours</option>
+                    </select>
+                    
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-1">Interest (1-5)</label>
+                            <select id="interestRating" class="w-full p-2 border border-gray-300 rounded-lg">
+                                <option value="">Select</option>
+                                <option value="1">1 ★</option>
+                                <option value="2">2 ★★</option>
+                                <option value="3">3 ★★★</option>
+                                <option value="4">4 ★★★★</option>
+                                <option value="5">5 ★★★★★</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-1">Utility (1-5)</label>
+                            <select id="utilityRating" class="w-full p-2 border border-gray-300 rounded-lg">
+                                <option value="">Select</option>
+                                <option value="1">1 ★</option>
+                                <option value="2">2 ★★</option>
+                                <option value="3">3 ★★★</option>
+                                <option value="4">4 ★★★★</option>
+                                <option value="5">5 ★★★★★</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-1">Overall (1-5)</label>
+                            <select id="overallRating" class="w-full p-2 border border-gray-300 rounded-lg">
+                                <option value="">Select</option>
+                                <option value="1">1 ★</option>
+                                <option value="2">2 ★★</option>
+                                <option value="3">3 ★★★</option>
+                                <option value="4">4 ★★★★</option>
+                                <option value="5">5 ★★★★★</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <label for="inputReviewText" class="block text-sm font-medium text-gray-600 mb-1">Overall Detailed Review and Advice</label>
+                <textarea id="inputReviewText" rows="4" placeholder="Share your honest experience, prerequisite warnings, and key skills learned here..." class="w-full p-2 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500 resize-none text-sm mb-6"></textarea>
+
+                <button onclick="submitReview()" class="w-full p-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700">Submit My Anonymous Review</button>
+            </div>
+        </div>
+        
+        <!-- Placeholder for general messages/errors -->
+        <div id="messageBox" class="p-3 mt-4 bg-yellow-100 border border-yellow-300 text-yellow-800 rounded-lg text-sm text-center hidden">
+            <!-- Messages appear here -->
+        </div>
+
+        <!-- Review Modal (弹窗评价) -->
+        <div id="reviewModal" class="modal-overlay">
+            <div class="bg-white p-6 rounded-lg w-full max-h-[80vh] overflow-y-auto mx-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold text-gray-700" id="modalCourseTitle">Course Reviews</h3>
+                    <button onclick="closeReviewModal()" class="text-gray-500 hover:text-gray-700">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div id="reviewContent" class="space-y-4">
+                    <!-- Reviews will be injected here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Files -->
+    <script type="module" src="./sidepanel.js"></script>
+    
+</body>
+</html>
