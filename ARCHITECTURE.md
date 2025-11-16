@@ -1,10 +1,9 @@
-
-
 # ARCHITECTURE.md
 
 ## Overview
 
-**CMU Course Assistant** is a Chrome Extension designed to assist students in selecting and reviewing CMU courses through an extensible multi-agent system. It fuses local static data, fully modular AI/ML agents (powered by user-configured LLMs—e.g. Google Gemini), anonymous user data, and privacy-first review sharing via Google Sheets (Apps Script) — all while requiring zero backend.
+**CMU Course Assistant** 是一个 Chrome 扩展，专为帮助学生智能筛选与匿名评价 CMU 课程而设计。系统高度模块化，核心功能均通过 side panel 实现（**请特别注意：本扩展只采用 side panel 架构，绝无 popup！**）。
+本项目融合本地静态课程数据、基于经典算法的本地推荐引擎，以及用户可选配置的 LLM API（如 Gemini）提升摘要和审核体验，所有数据流和核心功能均无后端依赖，隐私合规。
 
 ***
 
@@ -15,25 +14,25 @@ cmu-course-assistant/
 │
 ├── manifest.json
 ├── frontend/
-│   ├── sidepanel.html
-│   ├── frontend_example.html
+│   ├── sidepanel.html         # 主入口，所有核心UI均为side panel展现
+│   ├── frontend_example.html  # 完整交互&样式示例
 │   ├── styles.css
 │   ├── sidepanel.js
-│   ├── settingsModal.html     # UI for LLM API key/user config
+│   ├── settingsModal.html     # Gemini API Key 配置入口
 │
 ├── data/
-│   ├── courses.json
+│   ├── courses.json           # 静态课程库
 │
 ├── agents/
-│   ├── index.js              # Main dispatcher/agent hub
-│   ├── matchAgent.js
-│   ├── summarizeAgent.js
-│   ├── reviewAuditAgent.js
+│   ├── index.js               # agent调度总线
+│   ├── matchAgent.js          # 课程推荐，纯本地TF-IDF算法
+│   ├── summarizeAgent.js      # 课程摘要，自动调用Gemini API（用户可自定义）
+│   ├── reviewAuditAgent.js    # 智能审核，自动调用Gemini API（用户可自定义）
 │   ├── agentUtils.js
 │
 ├── storage/
-│   ├── chromeStorage.js
-│   ├── sheetApi.js
+│   ├── chromeStorage.js       # 本地存储实现
+│   ├── sheetApi.js            # 评价上传功能
 │
 ├── scripts/
 │   ├── background.js
@@ -41,7 +40,7 @@ cmu-course-assistant/
 ├── utils/
 │   ├── idUtils.js
 │   ├── auth.js
-│   ├── llmConfig.js
+│   ├── llmConfig.js           # LLM接口配置（自定义API key管理）
 │
 ├── package.json
 ├── ARCHITECTURE.md
@@ -52,162 +51,83 @@ cmu-course-assistant/
 
 ***
 
+## Frontend UI: Side Panel
+
+- **全部界面均在 sidepanel.html 和 sidepanel.js 实现，Chrome sidebar（侧边栏）原生支持**
+- 所有用户交互、课程推荐/摘要/评价写入/审核都在侧边栏完成，**绝无 popup 设计！**
+- UI 支持多tab视图：推荐、贡献/评价、结果展示，一键切换
+- settingsModal.html 提供 Gemini API Key 配置入口（仅侧边栏 settings tab 可访问）
+
+***
+
+## Core Agent Modules \& API Dependencies
+
+| Agent Name | 功能描述 | 是否依赖 Gemini API | 用户是否需配置API | 说明 |
+| :--: | :--: | :--: | :--: | :--: |
+| `matchAgent` | 课程智能匹配（推荐） | 否 | 否 | 全本地，TF-IDF/余弦/关键词等经典算法，无需AI或云端 |
+| `summarizeAgent` | 个性课程摘要（自定义prompt） | 是（可选） | 是 | 默认用Gemini API生成摘要，未配置则降级为本地模板 |
+| `reviewAuditAgent` | 课程评价审核（敏感词/质量） | 是（可选） | 是 | 默认用Gemini API审核，无API则本地规则审核 |
+
+
+***
+
+### API Key 配置与降级方案
+
+- **用户可在 side panel 内的 settingsModal.html tab 输入自己的 Google Gemini API Key**，所有密钥仅本地存储，无任何外发
+- 如果未填写，摘要和审核 agent 降级为本地模板或规则，但主推荐功能不受影响
+
+***
+
 ## Modular Agent System
 
-Each “agent” module is a focused, reusable, and testable component dedicated to an AI/logic-powered task.
-
-### Agent Overview Table
-
-| Agent Name | Responsibility | Input | Output | Implementation Highlights |
-| :-- | :-- | :-- | :-- | :-- |
-| `matchAgent` | Personalized course matching based on user profile, skills, and goals | User profile, skills, goals, course catalog | Ranked list of suggested courses | Runs a hybrid of TF-IDF \& cosine similarity or dense retrieval; entirely local, customizable match rules |
-| `summarizeAgent` | Produces single/two-sentence, user-customized, context-aware course summaries | Course desc, user goal/profile, user name | Friendly, tailored summary | Calls user-supplied LLM (e.g. Gemini API key), dynamically builds prompt for unique, live result |
-| `reviewAuditAgent` | Audits submitted reviews for quality, toxicity, spam, and other rule/compliance issues | Review text | Status + feedback | Can use an LLM for moderation or a local filter; outputs rationale as well as pass/fail |
-| `careerExpandAgent` | (optional) Expands vague user career goals into actionable skills for better matching | User goal text | Enriched skill/keyword list | Uses keyword mining/templates or LLM magic to enhance intent understanding |
-| `feedbackAgent` | (optional/UI) Composes automated, human-like responses when submitting or updating reviews | Review/match/summarize outputs | User-facing feedback | May call LLM or use local templates; for “copilot”-like interactions |
+| Agent Name | 功能责任 | 输入 | 输出 | 备注（Highlights） |
+| :--: | :--: | :--: | :--: | :--: |
+| `matchAgent` | 课程匹配（纯本地、必需核心） | 用户简历、技能、目标、课程库 | 推荐课程列表 | 本地TF-IDF，无AI依赖（必须功能） |
+| `summarizeAgent` | 课程摘要（自定义大模型，用户可选用API） | 课程描述、用户目标等 | 课程摘要字符串 | 默认用Gemini API，自定义API配置 |
+| `reviewAuditAgent` | 评价审核（敏感词/质量，用户可选用API） | 评价文本 | 审核结果 | 默认用Gemini API，自定义API配置 |
 
 
 ***
 
-### Example Agent Detail
-
-#### **summarizeAgent**
-
-- **Goal:** For every course and user, generate a concise, reader-friendly recommendation sentence that explicitly incorporates user context (e.g., career goal, name).
-- **How it works:**
-    - Endpoint (or agent config) is set by the user—Google Gemini by default, but modular.
-    - Reads config via `/utils/llmConfig.js` (API key, endpoint).
-    - For each course, builds prompts like:
-        - `"As a student wanting to become a product manager, how would you sum up the following course for Max: <CourseDesc>"`
-    - Sends prompt to Gemini (or user’s LLM) using their key (stored only locally).
-    - Renders the response as the summary — always user/context-unique, never static.
-- **Privacy:** No key or request data is ever shared; all LLM traffic is under user’s own account.
-- **Extensibility:** Easily supports other LLMs or local inference if user code/config changes.
-
-
-#### **matchAgent**
-
-- **Goal:** Given user profile, resume, and skills/interests, surface the most relevant subset of courses.
-- **How it works:**
-    - Loads catalog from `/data/courses.json`
-    - Calculates text similarity (TF-IDF/cosine or semantic embedding if desired; MVP can use keywords)
-    - Outputs ranked array of course objects
-- **Extensibility:** Can be upgraded to NN/embedding matchers per agent modularity.
-
-
-#### **reviewAuditAgent**
-
-- **Goal:** Modal/automatic review audit for profanity, length, redundancy, and other “toxicity” markers.
-- **How it works:**
-    - On review submit, passes text to agent (local OR LLM via user’s API key)
-    - Returns status: “approved”, or “rejected” (+ reason, e.g., “contains banned words”)
-    - Optionally can suggest improvements or auto-correct minor issues
-- **Privacy:** Review never leaves browser unless uploading (user-approved/explicit)
-
-***
-
-## LLM API Key and Agent Config
-
-- **Onboarding:**
-    - User clones project, loads extension, and is guided (UI in `settingsModal.html`) to paste their own LLM API key (e.g., Gemini)
-    - API key held in local browser storage, never distributed/collected
-    - Configurable endpoint/provider via `/utils/llmConfig.js`
-- **Agent integration:**
-    - Every agent that needs LLM power (e.g., summarizeAgent, reviewAuditAgent) uses helper in `llmConfig.js` to fetch the current API key/endpoint
-    - If no key set, agent returns clear error to UI
-- **README instructions:**
-    - “Before using, you must supply your own Gemini API key in Settings!”
-
-***
-
-## Data and Privacy
-
-- **Static data:** Courses loaded from local JSON, read-only, bundled
-- **All user IDs:** Anonymized UUID generated and stored locally; never linked to real identity
-- **Reviews:** Can be uploaded as anonymous to Google Sheets (via Apps Script endpoint), with only UUID/email-hash for removal logic (never the plain email)
-- **No backend:** All AI, review storage and matching is client-driven, except uplink to user-owned Google Sheet or public LLM endpoint with user’s config
-
-***
-
-## State \& Flow Table
-
-| State | Location | Access | Persistence | Notes |
-| :-- | :-- | :-- | :-- | :-- |
-| Course data | `/data/courses.json` | All agents/UI | Static | Bundled, read-only |
-| User profile/UUID | `chrome.storage.local` | Agents, UI | Local | Generated per-user, never leaves machine |
-| LLM API key | `chrome.storage.local` | Agents | Local | User-pasted, never leaves browser |
-| Reviews (pending/local) | `chrome.storage.local` | Agents, UI | Local | Local cache until upload |
-| Reviews (shared) | Google Sheet | read: public | Cloud | Only through Apps Script endpoint |
-
-
-***
-
-## Component Interactions
+## System Flow
 
 ```mermaid
 graph TD
-    UA[User Input: Resume, Goals] --> MA[matchAgent]
-    MA --> SC[SummarizeAgent (user LLM)]
-    SC --> UI[Frontend: Personalized summary display]
-    UI --> RV[Review submission]
-    RV --> RA[reviewAuditAgent (optional LLM)]
-    RA --> UP[sheetApi: Upload (anon UUID + hash)]
-    UP --> GS[Google Sheet Review Storage]
+    用户输入[用户输入: 简历+目标] --> matchAgent
+    matchAgent --> 推荐课程
+    推荐课程 --> summarizeAgent
+    summarizeAgent --> 课程摘要展示
+    评价提交 --> reviewAuditAgent
+    reviewAuditAgent --> 评价审核结果
+    reviewAuditAgent --> sheetApi[匿名上传到Google Sheet]
 ```
 
+- 推荐、摘要、审核三大核心agent均在 side panel 展现与驱动
 
 ***
 
-## How To Extend
+## Data \& Privacy
 
-- **Add new agents:** Drop into `/agents/`, export via `index.js`, and call from UI or other agents
-- **Change LLM provider:** Create a config in `/utils/llmConfig.js` and switch endpoint in UI/config
-- **Upgrade matching logic:** Swap out `matchAgent.js` for local vector DB, or introduce new retrieval agent
-
-***
-
-## Security \& Professional Practices
-
-- Zero trust: API keys stay in user browser, never checked in code or sent to developer
-- Clear agent encapsulation boundaries — modular rules, easy auditing, reusable in any JS/TS system
-- All user-facing features provide error feedback if config is missing/invalid
+- 课程数据：本地静态 `courses.json`
+- 用户ID和简历信息：匿名 UUID，只本地存储
+- 评价上传：仅评价内容+UUID hash，绝无真实邮箱/身份外泄
+- 所有API Key、敏感配置：仅本地持有
 
 ***
 
-## Setup Changelog
+## Setup / Extending Notes
 
-- [2025-11-13] Modular agent structure established; all LLMs use user-supplied API
-- [2025-11-13] Summarize agent now context/dynamic, embedded in user LLM
-- [2025-11-13] Sheet review storage, privacy, anonymized review deletion policy documented
+- 仅需本地环境和前端依赖，无需服务器
+- 新 agent 或功能，直接扩展 `/agents/` 并在 `index.js` 注册即可
+- 推荐算法可随时升级至本地 embedding，主流程绝无外部大模型依赖
 
 ***
-##Data Sources
-###Course Data
 
-Source: Distributed with extension as courses.json, loaded locally from the user's installation.
+## FAQ \& Highlights
 
-Structure: All necessary fields (course_id, name, term, prerequisites, description, ...).
+- **本项目所有核心功能在 Chrome side panel 实现，绝无 popup！**
+- 课程推荐 agent 完全本地、开箱即用，不依赖任何 AI 或 LLM
+- Gemini API 仅用于摘要/审核，非常容易配置，未填写不影响主流程
+- 所有数据本地保护，评价匿名上传，无后台服务器
 
-###Review Data
-
-Source: Cloud-based, stored on Google Sheet.
-
-Access: Via Apps Script Web API endpoint—
-https://script.google.com/macros/s/AKfycbzSK-r_07kUIi26xWSBUOf2c3JwdPLXVJK5RajPkM_uj2jZCzjQqp5F-xh8iQ28gNsD7Q/exec
-
-Supported actions:
-
-Submit new review (POST, with all review fields)
-
-Query all reviews (GET)
-
-Delete own review (POST to specialized endpoint)
-
-###Integration Notes
-Users download all course info as JSON and load via the extension frontend.
-
-User reviews are stored and managed centrally via the Google Sheet API; link is public and fixed in code/config.
-
-All other user data is kept locally, except what is explicitly submitted to the review sheet.
-
-
+***
