@@ -40,7 +40,7 @@
     <div class="sticky top-0 bg-white z-20 border-b border-gray-200 pb-2">
         <div class="flex justify-between items-center mb-2">
             <h1 class="text-xl font-bold text-blue-700">AI Course Planner</h1>
-            <button id="contributeButton" class="text-xs font-semibold px-3 py-1 bg-green-500 text-white rounded-full hover:bg-green-600 transition" onclick="changeView('contributionView')">
+            <button id="contributeButton" class="text-xs font-semibold px-3 py-1 bg-green-500 text-white rounded-full hover:bg-green-600 transition">
                 ✨ Contribute
             </button>
         </div>
@@ -68,7 +68,7 @@
                 <input type="text" id="careerGoal" placeholder="e.g., SWE Backend" class="w-full p-2 border rounded-lg mb-3 focus:ring-blue-500">
                 <label for="resumeInput" class="block text-sm font-medium text-gray-600 mb-1">Paste Resume/Skills</label>
                 <textarea id="resumeInput" rows="3" placeholder="Paste your resume text here..." class="w-full p-2 border rounded-lg focus:ring-blue-500"></textarea>
-                <button onclick="generateRecommendations()" class="mt-4 w-full p-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700">🚀 Find My Custom Path</button>
+                <button id="generateBtn" class="mt-4 w-full p-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700">🚀 Find My Custom Path</button>
             </div>
             <!-- 推荐区卡片格式渲染插槽 -->
             <section id="recommendationSection" class="mb-6 hidden p-4">
@@ -164,6 +164,6 @@
         </button>
     </div>
 
-    <script type="module" src="./sidepanel.js"></script>
+    <script src="./sidepanel.js"></script>
 </body>
 </html>
