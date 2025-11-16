@@ -5,11 +5,7 @@
   "description": "An intelligent Chrome extension for CMU students to discover and review courses with AI-powered recommendations",
   "action": {
     "default_title": "CMU Course Assistant",
-    "default_icon": {
-      "16": "images/icon-16.svg",
-      "48": "images/icon-48.svg",
-      "128": "images/icon-128.svg"
-    }
+    "default_icon": {}
   },
   "side_panel": {
     "default_path": "frontend/sidepanel.html"
@@ -26,11 +22,7 @@
   "background": {
     "service_worker": "chrome/background.js"
   },
-  "icons": {
-    "16": "images/icon-16.png",
-    "48": "images/icon-48.png",
-    "128": "images/icon-128.png"
-  },
+  
   "web_accessible_resources": [
     {
       "resources": ["courses.json", "src/external/*"],
@@ -38,6 +30,6 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'"
+    "extension_pages": "script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;"
   }
 }
