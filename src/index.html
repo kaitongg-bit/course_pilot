@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CMU Course Planner</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Ensuring the font is Inter and setting basic sidebar style */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            /* 关键点：将主体宽度固定在标准的侧边栏尺寸 (380px) */
+            width: 380px; 
+            margin: 0;
+            padding: 0;
+            background-color: #f8fafc; /* light gray background */
+            /* Crucial: Set body to full height to calculate scrollable content correctly */
+            height: 100vh; 
+            overflow: hidden; /* Prevent body scroll, content scrolls internally */
+        }
+        .scrollable-content {
+            /* Calculate height based on 100vh minus header/nav height (approx 110px) */
+            height: calc(100vh - 110px); 
+            overflow-y: auto;
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+        }
+        .modal-overlay {
+            /* 模态框背景层：位置固定在侧边栏内部 */
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%; /* Spans 380px */
+            height: 100%;
+            /* 半透明背景，用于模拟阻断交互 */
+            background-color: rgba(0, 0, 0, 0.5); 
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .active-tab {
+            color: #1d4ed8;
+            border-bottom: 2px solid #1d4ed8;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body class="p-4">
+
+    <!-- Top Area: Navigation, Title, and Refresh Button -->
+    <div class="sticky top-0 bg-white z-20 border-b border-gray-200 pb-2">
+        <div class="flex justify-between items-center mb-2">
+            <h1 class="text-xl font-bold text-blue-700">CMU Course Planner</h1>
+            <button id="refreshButton" class="text-xs font-semibold px-3 py-1 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition shadow-md" onclick="refreshCourses()">
+                🔄 Refresh
+            </button>
+        </div>
+
+        <!-- Navigation Bar (Tabs) -->
+        <nav id="navBar" class="flex justify-between text-sm font-medium text-center text-gray-500 border-b border-gray-200">
+            <button class="nav-tab inline-block p-2 rounded-t-lg hover:text-blue-600 hover:border-b-2 hover:border-blue-600 active-tab" 
+                    onclick="changeView('homeView')">
+                <span class="mr-1">💬</span> Dialogue
+            </button>
+            <button class="nav-tab inline-block p-2 rounded-t-lg hover:text-blue-600 hover:border-b-2 hover:border-blue-600" 
+                    onclick="changeView('searchView')">
+                <span class="mr-1">🔍</span> Search
+            </button>
+            <button class="nav-tab inline-block p-2 rounded-t-lg hover:text-blue-600 hover:border-b-2 hover:border-blue-600" 
+                    onclick="changeView('profileView')">
+                <span class="mr-1">👤</span> Profile
+            </button>
+        </nav>
+    </div>
+
+    <!-- Main Content Area: View Containers (Scrollable) -->
+    <div class="scrollable-content space-y-4 px-1">
+        
+        <!-- 1. Dialogue View (Home): Input & Recommendations -->
+        <div id="homeView" class="view-content">
+            <!-- Input Area -->
+            <section class="mb-6 p-4 bg-white rounded-xl shadow-lg border-t-4 border-yellow-500">
+                <h2 class="text-lg font-bold mb-3 text-gray-700">Your Course Preferences</h2>
+                
+                <label for="departmentFilter" class="block text-sm font-medium text-gray-600 mb-1">Department Filter</label>
+                <select id="departmentFilter" class="w-full p-2 border border-gray-300 rounded-lg mb-3 focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">All Departments</option>
+                    <option value="CS">Computer Science</option>
+                    <option value="ECE">Electrical & Computer Engineering</option>
+                    <option value="MISM">Information Systems</option>
+                    <option value="ML">Machine Learning</option>
+                </select>
+                
+                <label for="difficultyFilter" class="block text-sm font-medium text-gray-600 mb-1">Difficulty Level</label>
+                <select id="difficultyFilter" class="w-full p-2 border border-gray-300 rounded-lg mb-4 focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">All Levels</option>
+                    <option value="beginner">Beginner</option>
+                    <option value="intermediate">Intermediate</option>
+                    <option value="advanced">Advanced</option>
+                </select>
+
+                <button onclick="getRecommendedCourses()" class="mt-4 w-full p-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition shadow-lg">
+                    🚀 Get Recommended Courses
+                </button>
+            </section>
+
+            <!-- Recommendations (Starts Hidden) -->
+            <section id="recommendationSection" class="mb-6 hidden">
+                <h2 class="text-lg font-bold mb-3 text-gray-700">Top Recommended Courses</h2>
+                <div id="courseList" class="space-y-3">
+                    <!-- Recommendations will be injected here by JS -->
+                </div>
+            </section>
+        </div>
+
+        <!-- 2. Search View: Search Bar and Results -->
+        <div id="searchView" class="view-content hidden">
+            <h2 class="text-xl font-bold mb-4 text-gray-700">Search Course Reviews</h2>
+            <div class="p-4 bg-white rounded-xl shadow-lg mb-6">
+                <label for="courseSearch" class="block text-sm font-medium text-gray-600 mb-1">Search by Course Number</label>
+                <input type="text" id="courseSearch" placeholder="Enter course code (e.g., 15-745)..." class="w-full p-2 border border-gray-300 rounded-lg mb-3 focus:ring-blue-500 focus:border-blue-500">
+                <button onclick="searchCourse()" class="w-full p-3 bg-gray-600 text-white font-semibold rounded-xl hover:bg-gray-700 transition">
+                    Search Course
+                </button>
+            </div>
+            <div id="searchResults" class="space-y-4">
+                <div class="p-3 mt-4 bg-blue-100 border border-blue-300 text-blue-800 rounded-lg text-sm text-center">
+                    Enter a course number to see detailed information and student reviews.
+                </div>
+                <!-- Search results will be injected here -->
+            </div>
+        </div>
+
+        <!-- 3. Profile View: User Information -->
+        <div id="profileView" class="view-content hidden">
+            <h2 class="text-xl font-bold mb-4 text-blue-700">My Profile</h2>
+            <div class="p-4 bg-white rounded-xl shadow-lg border-t-4 border-green-500">
+                <div class="p-4 bg-gray-50 rounded-lg mb-4">
+                    <p class="text-sm font-medium text-gray-600">Your Course Preferences:</p>
+                    <p class="text-xs break-all mt-1" id="userPreferences">Loading...</p>
+                </div>
+                
+                <h3 class="text-lg font-semibold mb-3 text-gray-700">🎯 My Interests</h3>
+                <div id="interestsList" class="flex flex-wrap gap-2">
+                    <!-- Interests will be added dynamically -->
+                </div>
+
+                <h3 class="text-lg font-semibold mt-6 mb-3 text-gray-700">📊 Course History</h3>
+                <div class="space-y-2">
+                    <div class="flex justify-between p-2 bg-blue-50 rounded-lg">
+                        <span class="text-sm">Courses Viewed:</span>
+                        <span class="font-bold text-blue-600" id="coursesViewed">0</span>
+                    </div>
+                    <div class="flex justify-between p-2 bg-green-50 rounded-lg">
+                        <span class="text-sm">Courses Saved:</span>
+                        <span class="font-bold text-green-600" id="coursesSaved">0</span>
+                    </div>
+                </div>
+                
+                <!-- Edit Profile Button -->
+                <button onclick="editProfile()" class="mt-6 w-full p-3 bg-blue-500 text-white font-semibold rounded-xl hover:bg-blue-600 transition shadow-md">
+                    ✏️ Edit Profile
+                </button>
+
+                <!-- Profile Edit Form (Hidden by default) -->
+                <div id="profileEditForm" class="hidden mt-4 space-y-3 p-3 border border-gray-200 rounded-lg">
+                    <label class="block text-sm font-medium text-gray-600">Add Interest:</label>
+                    <input type="text" id="newInterest" placeholder="e.g., Machine Learning" class="w-full p-2 border border-gray-300 rounded-lg text-sm">
+                    <button onclick="addInterest()" class="w-full p-2 bg-green-500 text-white font-semibold rounded-lg">Add Interest</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Placeholder for general messages/errors -->
+        <div id="messageBox" class="p-3 mt-4 bg-yellow-100 border border-yellow-300 text-yellow-800 rounded-lg text-sm text-center hidden">
+            <!-- Messages appear here -->
+        </div>
+
+    </div>
+
+    <!-- Modal for Course Details -->
+    <div id="courseModal" class="modal-overlay">
+        <!-- MODAL FIX: Restricted width to max-[340px] to ensure it stays within the 380px sidebar boundary -->
+        <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-[340px] border-t-4 border-blue-500">
+            <h3 class="text-xl font-bold text-blue-700 mb-4" id="modalCourseTitle">Course Details</h3>
+            <div id="modalContent" class="max-h-80 overflow-y-auto space-y-4">
+                <!-- Course details will be injected here -->
+            </div>
+            <button onclick="closeModal()" class="mt-4 w-full p-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition">
+                Close & Go Back
+            </button>
+        </div>
+    </div>
+
+    <script src="js/course-planner.js"></script>
+</body>
+</html>
