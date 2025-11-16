@@ -28,34 +28,74 @@ function bindEvents() {
     });
 }
 
-// 计算匹配分数（TF-IDF简化版）
+// 计算匹配分数（增强版）
 function calculateMatchScore(course, goal, skillsList) {
     let score = 0;
-    const goalWords = goal.toLowerCase().split(/\s+/).filter(word => word.length > 2);
-    const allText = [
-        course.industry?.toLowerCase() || '',
-        course.keywords?.toString().toLowerCase() || '',
-        course.description_clean?.toLowerCase() || '',
-        course.course_name?.toLowerCase() || ''
-    ].join(' ');
+    const goalLower = goal.toLowerCase();
+    const goalWords = goalLower.split(/\s+/).filter(word => word.length > 2);
+    
+    // 分别检查每个字段的匹配程度
+    const fields = [
+        { text: course.industry?.toLowerCase() || '', weight: 1.5, name: 'industry' },
+        { text: course.keywords?.toString().toLowerCase() || '', weight: 1.2, name: 'keywords' },
+        { text: course.description_clean?.toLowerCase() || '', weight: 1.0, name: 'description' },
+        { text: course.course_name?.toLowerCase() || '', weight: 1.0, name: 'course_name' }
+    ];
 
-    // 职业目标关键词匹配
-    goalWords.forEach(word => {
-        if (allText.includes(word)) score += 0.3;
+    // 为每个字段计算匹配分数
+    fields.forEach(field => {
+        if (!field.text) return;
+        
+        // 职业目标关键词匹配
+        goalWords.forEach(word => {
+            if (field.text.includes(word)) {
+                score += 0.5 * field.weight; // 提高基础加分
+            }
+        });
+
+        // 技能匹配加分
+        skillsList.forEach(skill => {
+            if (skill.length > 2 && field.text.includes(skill)) {
+                score += 0.4 * field.weight; // 提高技能匹配加分
+            }
+        });
+
+        // 字段级别完整匹配
+        if (field.text.includes(goalLower)) {
+            score += 1.0 * field.weight; // 完整匹配大幅加分
+        }
     });
 
-    // 技能匹配加分
-    skillsList.forEach(skill => {
-        if (skill.length > 2 && allText.includes(skill)) score += 0.2;
-    });
-
-    // 行业匹配特殊加分
-    if (course.industry?.toLowerCase().includes(goal.toLowerCase())) {
-        score += 0.5;
+    // 特殊匹配情况加分
+    // 行业完全匹配
+    if (course.industry?.toLowerCase().includes(goalLower)) {
+        score += 2.0;
+    }
+    
+    // 课程名称包含目标职业
+    if (course.course_name?.toLowerCase().includes(goalLower)) {
+        score += 1.5;
+    }
+    
+    // 技能数量匹配加分
+    const matchedSkills = skillsList.filter(skill => 
+        skill.length > 2 && 
+        (course.description_clean?.toLowerCase().includes(skill) ||
+         course.keywords?.toString().toLowerCase().includes(skill))
+    ).length;
+    
+    if (matchedSkills > 0) {
+        score += Math.min(matchedSkills * 0.8, 3.0); // 技能匹配数量加分
     }
 
-    // 确保分数在 0-5 范围内
-    return Math.min(Math.max(score, 0), 5).toFixed(1);
+    // 应用非线性增长，确保优秀匹配得到高分
+    let finalScore = score;
+    if (score > 3) {
+        finalScore = 3 + (score - 3) * 0.5; // 高分区增长放缓
+    }
+    
+    // 确保分数在 0-5 范围内，并保留一位小数
+    return Math.min(Math.max(finalScore, 0), 5).toFixed(1);
 }
 
 // 根据匹配分数计算星级
