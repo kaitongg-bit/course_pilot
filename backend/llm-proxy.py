@@ -16,16 +16,12 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from llama_cpp import Llama
-
-def _init_llm(self):
-    llm = Llama(
-        model_path="models/Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
-        n_ctx=2048,
-        n_threads=8,
-        verbose=False
-    )
-    return llm
-
+llm = Llama(
+    model_path="models/Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+    n_ctx=2048,
+    n_threads=8,
+    verbose=False
+)
 
 # 确保nltk数据已下载
 try:
@@ -123,6 +119,9 @@ class CourseRecommender:
                 'course_name': course.get('course_name'),
                 'description': course.get('description'),
                 'prerequisites': course.get('prerequisites'),
+                "industry": course.get("industry"),        # 补上
+                "keywords": course.get("keywords"),        # 补上
+                "level": course.get("level"),              # 补上
                 'matching_percentage': round(matching_percentage, 2)
             })
         
@@ -196,7 +195,6 @@ def generate_text():
 def match_courses():
     try:
         data = request.json
-        print("接收到的数据:", data)  # 调试日志
 
         # 解析用户资料
         resume = data.get('resume', '')
@@ -238,19 +236,21 @@ def summarize_course():
         data = request.json
         course = data.get('course', {})  # 接收完整课程对象
         user_profile = data.get('user_profile', {})
-        
+        print(course), print(user_profile)
         # 构造提示词（修复原代码中的变量名错误）
         prompt = f"""
-        你是一个职业规划助手，请根据用户的职业目标和课程信息生成个性化推荐语。
-        用户职业目标: {user_profile.get('career_goals', '未知')}
-        用户技能: {', '.join(user_profile.get('skills', []))}
-        课程名称: {course.get('course_name', '未知课程')}
-        课程描述: {course.get('description', '无描述')}
-        请生成一段50-100字的推荐语。
+        请根据下列用户信息和课程内容，仅输出一条不超过80字的推荐语，语言风格活泼生动，禁止任何解释说明，推荐语必须以【推荐语】开头，以【推荐语】结尾。
+        ---
+        用户职业目标：{user_profile.get("career_goals", "")}
+        相关技能：{", ".join(user_profile.get("skills", []))}
+        课程名称：{course.get("course_name", "")}
+        课程行业：{course.get("industry", "未知行业")}
+        课程关键词：{course.get("keywords", "无关键词")}
+        课程描述：{course.get("description", "")}
         """
-        
-        # 调用LLM生成摘要（或模拟响应）
-        summary = "这是生成的个性化推荐语"  # 替换为实际LLM调用
+        print(prompt)
+        output = llm(prompt, max_tokens=100, temperature=0.9, top_p=0.95, top_k=10)
+        summary = output['choices'][0]['text'].strip()
         return jsonify({'status': 'success', 'summary': summary})
     
     except Exception as e:
@@ -260,8 +260,6 @@ def summarize_course():
 @app.route('/api/review/audit', methods=['POST'])
 def audit_review(self, review_text):
     """审核用户评价内容"""
-    if not hasattr(self, 'llm'):
-        self.llm = self._init_llm()  # 确保LLM已初始化
     try:
         review_data = request.json
         # 调用LLM审核评价（示例）
