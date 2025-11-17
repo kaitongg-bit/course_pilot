@@ -58,9 +58,6 @@ class CourseRecommender:
         self.vectorizer = TfidfVectorizer()
         self.tfidf_matrix = None
         self._prepare_tfidf()
-        
-        # 初始化LLM（实际使用时取消注释）
-        self.llm = self._init_llm()
     
     def load_courses(self):
         """加载课程数据"""
@@ -272,7 +269,7 @@ def course_summarize(self, description, user_profile):
         return "无法生成个性化推荐语，请稍后重试。"
 
 @app.route('/api/review/audit', methods=['POST'])
-    def audit_review(self, review_text):
+def audit_review(self, review_text):
     """审核用户评价内容"""
     if not hasattr(self, 'llm'):
         self.llm = self._init_llm()  # 确保LLM已初始化

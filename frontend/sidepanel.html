@@ -4,33 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=380, initial-scale=1.0">
     <title>AI Course Planner</title>
-    <!-- Load Tailwind CSS -->
     <link href="./tailwind.css" rel="stylesheet">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
         body {
             font-family: 'Inter', sans-serif;
-            width: 380px;
-            margin: 0;
-            padding: 0;
-            background-color: #f8fafc;
-            height: 100vh;
-            overflow: hidden;
+            width: 380px; margin: 0; padding: 0;
+            background-color: #f8fafc; height: 100vh; overflow: hidden;
         }
         .scrollable-content {
             height: calc(100vh - 160px);
-            overflow-y: auto;
-            padding-top: 1rem;
-            padding-bottom: 1rem;
+            overflow-y: auto; padding-top: 1rem; padding-bottom: 1rem;
         }
         .modal-overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(0, 0, 0, 0.4);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.4); display: none;
+            justify-content: center; align-items: center; z-index: 1000;
         }
     </style>
 </head>
@@ -44,21 +33,19 @@
                 ✨ Contribute
             </button>
         </div>
-        <!-- Tabs -->
         <nav id="navBar" class="flex justify-between text-sm text-gray-500 border-b border-gray-200 font-medium">
-            <button class="nav-tab inline-block p-2 rounded-t-lg hover:text-blue-600 tab-active" onclick="changeView('homeView')">
+            <button class="nav-tab inline-block p-2 rounded-t-lg hover:text-blue-600 tab-active" id="tab-dialogue">
                 <span class="mr-1">💬</span> Dialogue
             </button>
-            <button class="nav-tab inline-block p-2 rounded-t-lg hover:text-blue-600 tab-inactive" onclick="changeView('searchView')">
+            <button class="nav-tab inline-block p-2 rounded-t-lg hover:text-blue-600 tab-inactive" id="tab-search">
                 <span class="mr-1">🔍</span> Search
             </button>
-            <button class="nav-tab inline-block p-2 rounded-t-lg hover:text-blue-600 tab-inactive" onclick="changeView('profileView')">
+            <button class="nav-tab inline-block p-2 rounded-t-lg hover:text-blue-600 tab-inactive" id="tab-profile">
                 <span class="mr-1">👤</span> Profile
             </button>
         </nav>
     </div>
 
-    <!-- Main Content -->
     <div class="scrollable-content space-y-4 px-1">
         <!-- Dialogue/Home 推荐区块 -->
         <section id="homeView" class="view-content">
@@ -76,11 +63,7 @@
             <section id="recommendationSection" class="mb-6 hidden p-4">
                 <h2 class="text-lg font-bold mb-4 text-gray-800">AI Recommendations</h2>
                 <div id="courseList" class="grid gap-4">
-                    <!-- 卡片示例 -->
-                    <div class="course-card p-4 bg-white rounded-lg shadow-md border-l-4 border-blue-500 hover:shadow-lg transition">
-                        <h3 class="font-bold text-blue-700">15-445: Database Systems</h3>
-                        <p class="text-sm text-gray-600 mt-1 line-clamp-2">An introduction to database system design...</p>
-                    </div>
+                    <!-- 推荐卡片由 JS 动态插入 -->
                 </div>
             </section>
         </section>
@@ -91,7 +74,7 @@
             <div class="p-4 bg-white rounded-xl shadow-lg mb-6">
                 <label for="courseSearch" class="block text-sm font-medium text-gray-600 mb-1">Search by Course Number</label>
                 <input type="text" id="courseSearch" placeholder="e.g., 15-445" class="w-full p-2 border rounded-lg mb-3 focus:ring-blue-500">
-                <button onclick="searchCourses()" class="w-full p-3 bg-gray-600 text-white font-semibold rounded-xl hover:bg-gray-700 transition">Search & Quick View</button>
+                <button id="searchBtn" class="w-full p-3 bg-gray-600 text-white font-semibold rounded-xl hover:bg-gray-700 transition">Search & Quick View</button>
             </div>
             <div id="searchResults" class="space-y-4"></div>
         </section>
@@ -130,7 +113,7 @@
                 <input type="text" id="reviewCourseCode" placeholder="e.g., 15-445" class="w-full p-2 border rounded-lg mb-4 focus:ring-green-500">
                 <label for="inputReviewText" class="block text-sm font-medium text-gray-600 mb-1">Overall Review and Advice</label>
                 <textarea id="inputReviewText" rows="4" placeholder="Your experience, warnings, advice..." class="w-full p-2 border rounded-lg focus:ring-green-500 text-sm mb-6"></textarea>
-                <button onclick="submitReview()" class="w-full p-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700">Submit My Anonymous Review</button>
+                <button id="submitReviewBtn" class="w-full p-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700">Submit My Anonymous Review</button>
             </div>
         </section>
     </div>
@@ -140,7 +123,7 @@
         <div class="bg-white p-6 rounded-lg w-full max-h-[80vh] overflow-y-auto mx-4">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-lg font-bold text-gray-700" id="modalCourseTitle">Course Reviews</h3>
-                <button onclick="closeReviewModal()" class="text-gray-500 hover:text-gray-700">
+                <button id="closeReviewBtn" class="text-gray-500 hover:text-gray-700">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
@@ -152,17 +135,14 @@
 
     <!-- Bottom Nav -->
     <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around py-2 z-10">
-        <button class="nav-tab flex flex-col items-center text-xs" onclick="changeView('homeView')">
-            <span class="text-lg">🏠</span>
-            <span>推荐</span>
+        <button class="nav-tab flex flex-col items-center text-xs" id="nav-home">
+            <span class="text-lg">🏠</span><span>推荐</span>
         </button>
-        <button class="nav-tab flex flex-col items-center text-xs" onclick="changeView('searchView')">
-            <span class="text-lg">📚</span>
-            <span>课程</span>
+        <button class="nav-tab flex flex-col items-center text-xs" id="nav-search">
+            <span class="text-lg">📚</span><span>课程</span>
         </button>
-        <button class="nav-tab flex flex-col items-center text-xs" onclick="changeView('profileView')">
-            <span class="text-lg">👤</span>
-            <span>我的</span>
+        <button class="nav-tab flex flex-col items-center text-xs" id="nav-profile">
+            <span class="text-lg">👤</span><span>我的</span>
         </button>
     </div>
 
