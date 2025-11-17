@@ -13,7 +13,8 @@ function bindEvents() {
     });
     document.querySelectorAll('.nav-tab').forEach(tab => {
         tab.addEventListener('click', () => {
-            const targetView = tab.getAttribute('id')?.replace('tab-', '') + 'View';
+            const idBase = tab.getAttribute('id')?.replace('tab-', '');
+            const targetView = idBase ? (idBase + 'View') : '';
             if (targetView) changeView(targetView);
         });
     });
@@ -32,7 +33,7 @@ async function toggleSummary(courseObj, button) {
         skills: document.getElementById('skillsInput').value.split(/[，,、\s]+/).filter(t => t)
     };
     if (summaryDiv.innerHTML === '') {
-        button.textContent = '生成中...';
+        button.textContent = 'Generating...';
         button.disabled = true;
         try {
             const response = await fetch('http://localhost:3002/api/courses/summarize', {
@@ -45,7 +46,7 @@ async function toggleSummary(courseObj, button) {
             });
             const { summary } = await response.json();
             summaryDiv.innerHTML = `<p class="text-gray-700">${summary}</p>`;
-            button.textContent = '收起推荐语';
+            button.textContent = 'View less';
         } catch (error) {
             summaryDiv.innerHTML = `<p class="text-red-500">生成失败: ${error.message}</p>`;
             button.textContent = '重试';
@@ -54,7 +55,7 @@ async function toggleSummary(courseObj, button) {
         }
     }
     summaryDiv.classList.toggle('hidden');
-    button.textContent = summaryDiv.classList.contains('hidden') ? '展开推荐语' : '收起推荐语';
+    button.textContent = summaryDiv.classList.contains('hidden') ? 'View more' : 'View less';
 }
 
 function showRealReviews(courseObj) {
@@ -62,11 +63,11 @@ function showRealReviews(courseObj) {
     const modalTitle = document.getElementById('modalCourseTitle');
     const reviewContent = document.getElementById('reviewContent');
     const sampleReviews = [
-        "老师很专业，实战案例多，收获远超预期！",
-        "适合入门进阶，作业难度适中，助教反馈很快。",
-        "课程内容紧贴行业，学完马上能用到实际项目中。"
+        "The instructor is highly professional, with numerous real-world case studies, delivering far more than expected!",
+        "Suitable for beginners and intermediate learners, with assignments of moderate difficulty and prompt feedback from teaching assistants.",
+        "Course content is closely aligned with industry needs, enabling immediate application to real-world projects upon completion."
     ];
-    modalTitle.textContent = `课程评价 - ${courseObj.course_name}`;
+    modalTitle.textContent = `Course reviews - ${courseObj.course_name}`;
     reviewContent.innerHTML = sampleReviews.map(r =>
         `<div class="p-3 bg-gray-100 rounded text-gray-800">${r}</div>`
     ).join('');
@@ -114,7 +115,7 @@ async function generateRecommendations() {
                         <div class="flex flex-wrap gap-2 mb-3">
                             <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
                                 ${getStarRatingFromMatchPct(course.matching_percentage || 0)}
-                                匹配度 ${course.matching_percentage || '--'}%
+                                matching_percentage ${course.matching_percentage || '--'}%
                             </span>
                         </div>
                         <div id="summary-${course.course_id}" class="hidden mt-3 p-3 bg-gray-50 rounded"></div>
@@ -122,12 +123,12 @@ async function generateRecommendations() {
                             <button
                                 class="toggle-summary-btn flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded text-sm"
                                 data-course-index="${idx}">
-                                展开推荐语
+                                View more
                             </button>
                             <button
                                 class="view-reviews-btn flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 py-2 px-3 rounded text-sm"
                                 data-course-index="${idx}">
-                                查看真实评价
+                                Real Reviews
                             </button>
                         </div>
                     </div>
