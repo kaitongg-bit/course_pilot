@@ -194,10 +194,10 @@ def generate_text():
 
 @app.route('/api/courses/match', methods=['POST'])
 def match_courses():
-    """课程匹配端点"""
     try:
         data = request.json
-        
+        print("接收到的数据:", data)  # 调试日志
+
         # 解析用户资料
         resume = data.get('resume', '')
         skills_str = data.get('skills', '')
@@ -215,21 +215,13 @@ def match_courses():
         # 扩展用户资料
         expanded_profile = expand_profile(user_profile)
         
-        # 获取匹配的课程
+        # 获取匹配的课程（不生成摘要）
         matched_courses = recommender.course_match(expanded_profile)
         
-        # 为每个课程生成摘要
-        results = []
-        for course in matched_courses[:15]:  # 只返回前15个结果
-            summary = recommender.course_summarize(course['description'], user_profile)
-            results.append({
-                **course,
-                'summary': summary
-            })
-        
+        # 直接返回课程数据
         return jsonify({
             'status': 'success',
-            'results': results,
+            'results': matched_courses[:15],  # 只返回前15个结果
             'total_matches': len(matched_courses)
         })
         
@@ -239,34 +231,31 @@ def match_courses():
             'details': str(e)
         }), 500
 
-@app.route('/api/courses/summarize', methods=['POST'])
-def course_summarize(self, description, user_profile):
-    """调用本地LLM生成个性化课程摘要"""
-    if not hasattr(self, 'llm'):
-        self.llm = self._init_llm()  # 确保LLM已初始化
 
+@app.route('/api/courses/summarize', methods=['POST'])
+def summarize_course():
     try:
-        # 构造LLM提示词
+        data = request.json
+        course = data.get('course', {})  # 接收完整课程对象
+        user_profile = data.get('user_profile', {})
+        
+        # 构造提示词（修复原代码中的变量名错误）
         prompt = f"""
         你是一个职业规划助手，请根据用户的职业目标和课程信息生成个性化推荐语。
         用户职业目标: {user_profile.get('career_goals', '未知')}
         用户技能: {', '.join(user_profile.get('skills', []))}
-        课程名称: {description.get('course_name', '未知课程')}
-        课程描述: {description.get('description', '无描述')}
-        请生成一段50-100字的推荐语，说明这门课程如何帮助用户实现职业目标。
+        课程名称: {course.get('course_name', '未知课程')}
+        课程描述: {course.get('description', '无描述')}
+        请生成一段50-100字的推荐语。
         """
         
-        # 调用LLM（实际使用时取消注释）
-        response = self.llm(prompt, max_tokens=200)
-        summary = response['choices'][0]['text'].strip()
-        
-        # 模拟响应（测试用）
-        summary = f"这门课程《{course_description.get('course_name', '未知课程')}》适合追求{user_profile.get('career_goals', '职业发展')}的用户，因为它涵盖了{', '.join(user_profile.get('skills', []))}等关键技能。"
-        return summary
-
+        # 调用LLM生成摘要（或模拟响应）
+        summary = "这是生成的个性化推荐语"  # 替换为实际LLM调用
+        return jsonify({'status': 'success', 'summary': summary})
+    
     except Exception as e:
-        print(f"LLM摘要生成失败: {e}")
-        return "无法生成个性化推荐语，请稍后重试。"
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/review/audit', methods=['POST'])
 def audit_review(self, review_text):
