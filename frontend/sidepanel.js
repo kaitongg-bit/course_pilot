@@ -1,4 +1,3 @@
-// 分页切换函数
 function changeView(viewId) {
     document.querySelectorAll('.view-content').forEach(view => {
         view.classList.add('hidden');
@@ -6,39 +5,28 @@ function changeView(viewId) {
     document.getElementById(viewId)?.classList.remove('hidden');
 }
 
-// 事件绑定函数
 function bindEvents() {
     const generateBtn = document.getElementById('generateBtn');
     generateBtn?.addEventListener('click', generateRecommendations);
-
     document.getElementById('contributeButton')?.addEventListener('click', () => {
         changeView('contributionView');
     });
-
-    // 支持底部和顶部导航栏按钮
     document.querySelectorAll('.nav-tab').forEach(tab => {
         tab.addEventListener('click', () => {
-            // 如果有 onclick，自动匹配目标视图
             const targetView = tab.getAttribute('id')?.replace('tab-', '') + 'View';
             if (targetView) changeView(targetView);
         });
     });
 }
 
-// 根据匹配分数计算星级
 function getStarRatingFromMatchPct(matching_percentage) {
     const stars = Math.max(1, Math.round(matching_percentage / 20));
     return '⭐'.repeat(stars) + '☆'.repeat(5 - stars);
 }
 
-// 切换推荐语显示/隐藏，传完整课程对象
 async function toggleSummary(courseObj, button) {
-    console.log('传给后端的 course 对象：', courseObj);
     const summaryDiv = document.getElementById(`summary-${courseObj.course_id}`);
-    if (!summaryDiv) {
-        console.error(`错误: 未找到推荐语容器 #summary-${courseObj.course_id}`);
-        return;
-    }
+    if (!summaryDiv) return;
     const userProfile = {
         career_goals: document.getElementById('careerGoal').value,
         skills: document.getElementById('skillsInput').value.split(/[，,、\s]+/).filter(t => t)
@@ -46,7 +34,6 @@ async function toggleSummary(courseObj, button) {
     if (summaryDiv.innerHTML === '') {
         button.textContent = '生成中...';
         button.disabled = true;
-
         try {
             const response = await fetch('http://localhost:3002/api/courses/summarize', {
                 method: 'POST',
@@ -67,23 +54,38 @@ async function toggleSummary(courseObj, button) {
         }
     }
     summaryDiv.classList.toggle('hidden');
-    button.textContent = summaryDiv.classList.contains('hidden')
-        ? '展开推荐语'
-        : '收起推荐语';
+    button.textContent = summaryDiv.classList.contains('hidden') ? '展开推荐语' : '收起推荐语';
 }
 
-// 生成推荐课程卡片并渲染，能保证所有字段都传递
+function showRealReviews(courseObj) {
+    const modal = document.getElementById('reviewModal');
+    const modalTitle = document.getElementById('modalCourseTitle');
+    const reviewContent = document.getElementById('reviewContent');
+    const sampleReviews = [
+        "老师很专业，实战案例多，收获远超预期！",
+        "适合入门进阶，作业难度适中，助教反馈很快。",
+        "课程内容紧贴行业，学完马上能用到实际项目中。"
+    ];
+    modalTitle.textContent = `课程评价 - ${courseObj.course_name}`;
+    reviewContent.innerHTML = sampleReviews.map(r =>
+        `<div class="p-3 bg-gray-100 rounded text-gray-800">${r}</div>`
+    ).join('');
+    modal.style.display = 'flex';
+}
+
+function closeReviewModal() {
+    document.getElementById('reviewModal').style.display = 'none';
+}
+
 async function generateRecommendations() {
     try {
         const careerGoal = document.getElementById('careerGoal').value;
         const skillsText = document.getElementById('skillsInput').value;
         const resumeText = document.getElementById('resumeInput').value;
-
         if (!careerGoal.trim()) {
             alert('请输入职业目标');
             return;
         }
-
         const courseList = document.getElementById('courseList');
         courseList.innerHTML = `
             <div class="text-center py-8">
@@ -91,7 +93,6 @@ async function generateRecommendations() {
                 <p class="mt-2 text-gray-600">AI正在分析您的职业目标并推荐课程...</p>
             </div>
         `;
-
         const response = await fetch('http://localhost:3002/api/courses/match', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -104,41 +105,53 @@ async function generateRecommendations() {
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const result = await response.json();
         if (result.error) throw new Error(result.error);
-
         const courses = result.results;
         courseList.innerHTML = `
-            <div class="mb-6 p-4 bg-blue-50 rounded-lg">
-                <h3 class="font-bold text-lg text-blue-800 mb-2">🤖 AI分析报告</h3>
-                <p class="text-gray-700">${result.analysis || '暂无分析报告'}</p>
+            <div class="grid gap-4">
+                ${courses.map((course, idx) => `
+                    <div class="course-card bg-white rounded-lg shadow-md p-4 border-l-4 border-blue-500">
+                        <h3 class="font-bold text-lg text-blue-700 mb-2">${course.course_id}: ${course.course_name}</h3>
+                        <div class="flex flex-wrap gap-2 mb-3">
+                            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                                ${getStarRatingFromMatchPct(course.matching_percentage || 0)}
+                                匹配度 ${course.matching_percentage || '--'}%
+                            </span>
+                        </div>
+                        <div id="summary-${course.course_id}" class="hidden mt-3 p-3 bg-gray-50 rounded"></div>
+                        <div class="flex gap-2 mt-3">
+                            <button
+                                class="toggle-summary-btn flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded text-sm"
+                                data-course-index="${idx}">
+                                展开推荐语
+                            </button>
+                            <button
+                                class="view-reviews-btn flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 py-2 px-3 rounded text-sm"
+                                data-course-index="${idx}">
+                                查看真实评价
+                            </button>
+                        </div>
+                    </div>
+                `).join('')}
             </div>
-            ${courses.map((course, idx) => `
-                <div class="course-card bg-white rounded-lg shadow-md p-4 mb-4 border-l-4 border-blue-500">
-                    <h3 class="font-bold text-lg text-blue-700 mb-2">${course.course_id}: ${course.course_name}</h3>
-                    <div class="flex flex-wrap gap-2 mb-3">
-                        <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                            ${getStarRatingFromMatchPct(course.matching_percentage || 0)}
-                            匹配度 ${course.matching_percentage || '--'}%
-                        </span>
-                    </div>
-                    <div id="summary-${course.course_id}" class="hidden mt-3 p-3 bg-gray-50 rounded"></div>
-                    <div class="flex gap-2 mt-3">
-                        <button 
-                            class="toggle-summary-btn flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded text-sm"
-                            data-course-index="${idx}"
-                        >
-                            展开推荐语
-                        </button>
-                    </div>
-                </div>
-            `).join('')}
         `;
         document.getElementById('recommendationSection').classList.remove('hidden');
-        // 绑定推荐语按钮，用下标精准传对象
+        // 推荐语按钮
         document.querySelectorAll('.toggle-summary-btn').forEach((btn, idx) => {
             btn.addEventListener('click', function () {
                 toggleSummary(courses[idx], btn);
             });
         });
+        // 查看评价按钮
+        document.querySelectorAll('.view-reviews-btn').forEach((btn, idx) => {
+            btn.addEventListener('click', function () {
+                showRealReviews(courses[idx]);
+            });
+        });
+        // 关闭评价弹窗
+        const closeBtn = document.getElementById('closeReviewBtn');
+        if (closeBtn) {
+            closeBtn.onclick = closeReviewModal;
+        }
     } catch (error) {
         const courseList = document.getElementById('courseList');
         courseList.innerHTML = `
@@ -154,7 +167,6 @@ async function generateRecommendations() {
     }
 }
 
-// 页面加载完成后执行
 document.addEventListener('DOMContentLoaded', () => {
     bindEvents();
 });

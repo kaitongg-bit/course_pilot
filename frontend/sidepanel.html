@@ -9,7 +9,8 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
         body {
             font-family: 'Inter', sans-serif;
-            width: 380px; margin: 0; padding: 0;
+            width: 380px;
+            margin: 0; padding: 0;
             background-color: #f8fafc; height: 100vh; overflow: hidden;
         }
         .scrollable-content {
@@ -25,7 +26,7 @@
 </head>
 <body class="p-4">
 
-    <!-- Header & Nav -->
+    <!-- Header & Top Nav -->
     <div class="sticky top-0 bg-white z-20 border-b border-gray-200 pb-2">
         <div class="flex justify-between items-center mb-2">
             <h1 class="text-xl font-bold text-blue-700">AI Course Planner</h1>
@@ -34,8 +35,8 @@
             </button>
         </div>
         <nav id="navBar" class="flex justify-between text-sm text-gray-500 border-b border-gray-200 font-medium">
-            <button class="nav-tab inline-block p-2 rounded-t-lg hover:text-blue-600 tab-active" id="tab-dialogue">
-                <span class="mr-1">💬</span> Dialogue
+            <button class="nav-tab inline-block p-2 rounded-t-lg hover:text-blue-600 tab-active" id="tab-home">
+                <span class="mr-1">💬</span> Chat
             </button>
             <button class="nav-tab inline-block p-2 rounded-t-lg hover:text-blue-600 tab-inactive" id="tab-search">
                 <span class="mr-1">🔍</span> Search
@@ -47,13 +48,13 @@
     </div>
 
     <div class="scrollable-content space-y-4 px-1">
-        <!-- Dialogue/Home 推荐区块 -->
+        <!-- Chat/Home 区块 -->
         <section id="homeView" class="view-content">
             <div class="mb-6 p-4 bg-white rounded-xl shadow-lg border-t-4 border-yellow-500">
                 <h2 class="text-lg font-bold mb-3 text-gray-700">Your Goal & Skills Profile</h2>
                 <label for="careerGoal" class="block text-sm font-medium text-gray-600 mb-1">Target Career</label>
                 <input type="text" id="careerGoal" placeholder="e.g., SWE Backend" class="w-full p-2 border rounded-lg mb-3 focus:ring-blue-500">
-                <label for="skillsInput"class="block text-sm font-medium text-gray-600 mb-1">Skills</label>
+                <label for="skillsInput" class="block text-sm font-medium text-gray-600 mb-1">Skills</label>
                 <input type="text" id="skillsInput" placeholder="python, machine learning" class="w-full p-2 border rounded-lg mb-3 focus:ring-blue-500">
                 <label for="resumeInput" class="block text-sm font-medium text-gray-600 mb-1">Paste Resume</label>
                 <textarea id="resumeInput" rows="3" placeholder="Paste your resume text here..." class="w-full p-2 border rounded-lg focus:ring-blue-500"></textarea>
@@ -131,19 +132,6 @@
             </div>
             <div id="reviewContent" class="space-y-4"></div>
         </div>
-    </div>
-
-    <!-- Bottom Nav -->
-    <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around py-2 z-10">
-        <button class="nav-tab flex flex-col items-center text-xs" id="nav-home">
-            <span class="text-lg">🏠</span><span>推荐</span>
-        </button>
-        <button class="nav-tab flex flex-col items-center text-xs" id="nav-search">
-            <span class="text-lg">📚</span><span>课程</span>
-        </button>
-        <button class="nav-tab flex flex-col items-center text-xs" id="nav-profile">
-            <span class="text-lg">👤</span><span>我的</span>
-        </button>
     </div>
 
     <script src="./sidepanel.js"></script>
