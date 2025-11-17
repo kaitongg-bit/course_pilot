@@ -1,0 +1,83 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.log
+
+# Jupyter/Notebook
+.ipynb_checkpoints
+
+# Virtualenv/Conda
+venv/
+env/
+ENV/
+.venv/
+.pip/
+conda/
+*.conda
+
+# OS临时文件
+.DS_Store
+Thumbs.db
+
+# VSCode/PyCharm等IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 数据与模型文件（重点！大语言模型、gguf、pkl、ckpt）
+models/
+*.gguf
+*.pth
+*.ckpt
+*.bin
+*.zip
+*.tar
+*.tar.gz
+*.h5
+*.pt
+*.tflite
+*.onnx
+
+# 个人实验/数据
+data/
+datasets/
+*.jsonl
+
+# Node相关
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 前端打包生成物
+build/
+dist/
+
+# 其他文件夹（你存放模型、缓存的地方可自定义加）
+cache/
+tmp/
+output/
+outputs/
+
+# 环境变量及密钥
+.env
+.env.*
+
+# 错误文件/上传失败文件
+*.out
+*.bak
+
+# Handshake/学校相关
+*.pdf
+*.docx
+
+# 你项目里实际装模型的路径也可以加，比如:
+# llama.cpp/、qwen/
+llama.cpp/
+Qwen/

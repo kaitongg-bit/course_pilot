@@ -28,81 +28,17 @@ function bindEvents() {
     });
 }
 
-// 计算匹配分数（增强版）
-function calculateMatchScore(course, goal, skillsList) {
-    let score = 0;
-    const goalLower = goal.toLowerCase();
-    const goalWords = goalLower.split(/\s+/).filter(word => word.length > 2);
-    
-    // 分别检查每个字段的匹配程度
-    const fields = [
-        { text: course.industry?.toLowerCase() || '', weight: 1.5, name: 'industry' },
-        { text: course.keywords?.toString().toLowerCase() || '', weight: 1.2, name: 'keywords' },
-        { text: course.description_clean?.toLowerCase() || '', weight: 1.0, name: 'description' },
-        { text: course.course_name?.toLowerCase() || '', weight: 1.0, name: 'course_name' }
-    ];
 
-    // 为每个字段计算匹配分数
-    fields.forEach(field => {
-        if (!field.text) return;
-        
-        // 职业目标关键词匹配
-        goalWords.forEach(word => {
-            if (field.text.includes(word)) {
-                score += 0.5 * field.weight; // 提高基础加分
-            }
-        });
 
-        // 技能匹配加分
-        skillsList.forEach(skill => {
-            if (skill.length > 2 && field.text.includes(skill)) {
-                score += 0.4 * field.weight; // 提高技能匹配加分
-            }
-        });
 
-        // 字段级别完整匹配
-        if (field.text.includes(goalLower)) {
-            score += 1.0 * field.weight; // 完整匹配大幅加分
-        }
-    });
-
-    // 特殊匹配情况加分
-    // 行业完全匹配
-    if (course.industry?.toLowerCase().includes(goalLower)) {
-        score += 2.0;
-    }
-    
-    // 课程名称包含目标职业
-    if (course.course_name?.toLowerCase().includes(goalLower)) {
-        score += 1.5;
-    }
-    
-    // 技能数量匹配加分
-    const matchedSkills = skillsList.filter(skill => 
-        skill.length > 2 && 
-        (course.description_clean?.toLowerCase().includes(skill) ||
-         course.keywords?.toString().toLowerCase().includes(skill))
-    ).length;
-    
-    if (matchedSkills > 0) {
-        score += Math.min(matchedSkills * 0.8, 3.0); // 技能匹配数量加分
-    }
-
-    // 应用非线性增长，确保优秀匹配得到高分
-    let finalScore = score;
-    if (score > 3) {
-        finalScore = 3 + (score - 3) * 0.5; // 高分区增长放缓
-    }
-    
-    // 确保分数在 0-5 范围内，并保留一位小数
-    return Math.min(Math.max(finalScore, 0), 5).toFixed(1);
-}
 
 // 根据匹配分数计算星级
-function getStarRating(score) {
-    const stars = Math.round(parseFloat(score));
+function getStarRating(matching_percentage) {
+    // 100分 -> 5星
+    const stars = Math.round(matching_percentage / 20);
     return '⭐'.repeat(stars) + '☆'.repeat(5 - stars);
 }
+
 
 // 课程详情弹窗函数（占位）
 function showCourseDetails(courseId) {
@@ -135,56 +71,51 @@ async function generateRecommendations() {
     try {
         // 获取输入
         const careerGoal = document.getElementById('careerGoal').value;
+        const skillsText = document.getElementById('skillsInput').value;
         const resumeText = document.getElementById('resumeInput').value;
 
-        // 加载数据
-        const response = await fetch('../courses.json');
-        const courses = await response.json();
-        console.log('[Debug 5] 课程数据加载成功，总数:', courses.length);
+        if (!careerGoal.trim()) {
+            alert('请输入职业目标');
+            return;
+        }
 
-        // 创建技能列表（在函数作用域内）
-        const skillsList = resumeText.toLowerCase().split(',').map(s => s.trim());
-        console.log('[Debug] 当前技能列表:', skillsList);
+        // 显示加载状态
+        const courseList = document.getElementById('courseList');
+        courseList.innerHTML = '<div class="text-center py-8"><div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div><p class="mt-2 text-gray-600">AI正在分析您的职业目标并推荐课程...</p></div>';
 
-        // 筛选课程
-        const filteredCourses = courses.filter(course => {
-            const goal = careerGoal.toLowerCase();
-
-            // 匹配逻辑
-            const industryMatch = course.industry?.toLowerCase().includes(goal) || false;
-            
-            let keywordsMatch = false;
-            if (Array.isArray(course.keywords)) {
-                keywordsMatch = course.keywords.some(kw => 
-                    kw.toLowerCase().includes(goal) ||
-                    skillsList.some(skill => kw.toLowerCase().includes(skill))
-                );
-            } else if (typeof course.keywords === 'string') {
-                keywordsMatch = 
-                    course.keywords.toLowerCase().includes(goal) ||
-                    skillsList.some(skill => course.keywords.toLowerCase().includes(skill));
-            }
-
-            const descriptionMatch = 
-                course.description_clean?.toLowerCase().includes(goal) || 
-                skillsList.some(skill => course.description_clean?.toLowerCase().includes(skill));
-
-            return industryMatch || keywordsMatch || descriptionMatch;
+        // 调用本地LLM代理生成智能推荐
+        const response = await fetch('http://localhost:3002/api/courses/match', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              resume: resumeText,
+              skills: skillsText,         // 例如 "python, 数据分析, 项目管理"
+              career_goals: careerGoal
+            })
         });
 
-        // 更新UI - 按照MVP设计生成课程卡片
-        const courseList = document.getElementById('courseList');
-        if (filteredCourses.length > 0) {
-            // 为每个课程计算真实匹配分数
-            const scoredCourses = filteredCourses.map(course => {
-                const matchScore = calculateMatchScore(course, careerGoal, skillsList);
-                return { ...course, matchScore };
-            });
-            
-            // 按匹配分数降序排序
-            scoredCourses.sort((a, b) => b.matchScore - a.matchScore);
-            
-            courseList.innerHTML = scoredCourses.map(course => `
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        
+        if (result.error) {
+            throw new Error(result.error);
+        }
+
+        // 解析AI生成的推荐结果
+        const { recommended_courses, analysis } = result;
+        
+        // 更新UI显示AI分析结果
+        courseList.innerHTML = `
+            <div class="mb-6 p-4 bg-blue-50 rounded-lg">
+                <h3 class="font-bold text-lg text-blue-800 mb-2">🤖 AI分析报告</h3>
+                <p class="text-gray-700">${analysis}</p>
+            </div>
+            ${recommended_courses.map(course => `
                 <div class="course-card bg-white rounded-lg shadow-md p-4 mb-4 border-l-4 border-blue-500 hover:shadow-lg transition-shadow duration-200">
                     <!-- 课程标题和编号 -->
                     <h3 class="font-bold text-lg text-blue-700 mb-2">${course.course_id}: ${course.course_name}</h3>
@@ -192,10 +123,10 @@ async function generateRecommendations() {
                     <!-- 匹配分数和标签 -->
                     <div class="flex flex-wrap gap-2 mb-3">
                         <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                            ${getStarRating(course.matchScore)} 匹配分数: ${course.matchScore}/5
+                            ${getStarRating(course.match_score)} 匹配分数: ${course.match_score}/5
                         </span>
                         <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
-                            📅 工作量: 15h/week
+                            📅 工作量: ${course.workload || '15h/week'}
                         </span>
                         <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800">
                             🏷️ ${course.industry}
@@ -205,18 +136,18 @@ async function generateRecommendations() {
                     <!-- 风险提示和职业ROI -->
                     <div class="flex flex-wrap gap-2 mb-3">
                         <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">
-                            ⚠️ 风险提示: ${course.prerequisites ? '需先修课程' : '基础难度'}
+                            ⚠️ 风险提示: ${course.risk_level || '中等'}
                         </span>
                         <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                            📌 职业ROI: 高 (适合${careerGoal})
+                            📌 职业ROI: ${course.roi || '高'}
                         </span>
                     </div>
                     
-                    <!-- 个性化摘要 -->
+                    <!-- AI生成的个性化摘要 -->
                     <div class="bg-gray-50 rounded p-3 mb-3">
                         <p class="text-sm text-gray-700">
-                            <span class="font-medium">🔍 摘要:</span> 
-                            ${course.description_clean.substring(0, 120)}...
+                            <span class="font-medium">🔍 AI推荐理由:</span> 
+                            ${course.reasoning}
                         </p>
                     </div>
                     
@@ -228,12 +159,22 @@ async function generateRecommendations() {
                         </button>
                     </div>
                 </div>
-            `).join('');
-            document.getElementById('recommendationSection').classList.remove('hidden');
-        } else {
-            console.log('[Debug] 无匹配课程');
-        }
+            `).join('')}
+        `;
+        
+        document.getElementById('recommendationSection').classList.remove('hidden');
+        
     } catch (error) {
-        console.error('[Debug 14] 发生错误:', error);
+        console.error('[Debug] 发生错误:', error);
+        const courseList = document.getElementById('courseList');
+        courseList.innerHTML = `
+            <div class="text-center py-8 text-red-600">
+                <p>❌ 请求失败: ${error.message}</p>
+                <p class="text-sm mt-2">请确保本地LLM代理服务器正在运行 (端口5001)</p>
+                <button onclick="generateRecommendations()" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded">
+                    重试
+                </button>
+            </div>
+        `;
     }
 }

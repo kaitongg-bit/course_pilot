@@ -1,5 +1,37 @@
-// 评价审核Agent - 审核用户提交的评价内容
+// 评价审核Agent - 审核用户提交的评价内容（使用本地LLM）
 // 输入：评价文本，输出：审核结果
+
+// 调用本地LLM代理
+async function callLocalLLM(prompt) {
+    try {
+        const response = await fetch('http://localhost:5001/api/llm/generate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                prompt: prompt,
+                max_tokens: 200,
+                temperature: 0.3
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        
+        if (result.error) {
+            throw new Error(result.error);
+        }
+
+        return result.text;
+    } catch (error) {
+        console.warn('本地LLM调用失败，使用本地审核：', error);
+        return null;
+    }
+}
 
 // 粗口过滤列表
 const PROFANITY_WORDS = [
@@ -51,12 +83,10 @@ function localReviewAudit(reviewText, courseId) {
     };
 }
 
-// 主审核函数
+// 主审核函数（使用AI智能审核）
 async function auditReview(reviewText, courseId) {
-    // 检查是否配置了Gemini API
-    if (window.geminiAPI && window.geminiAPI.isConfigured) {
-        try {
-            const prompt = `
+    try {
+        const prompt = `
 你是一个课程评价审核助手，请检查以下评价内容：
 - 评价文本：${reviewText}
 - 课程ID：${courseId}
@@ -66,26 +96,26 @@ async function auditReview(reviewText, courseId) {
 2. 拒绝粗口、人身攻击或完全无关的内容
 3. 通过时生成一句非固定的鼓励语
 
-返回JSON格式：{"valid": true/false, "message": "审核说明"}
-            `;
-            
-            const response = await window.geminiAPI.generate(prompt);
-            
+请返回JSON格式：{"valid": true/false, "message": "审核说明"}
+只返回JSON格式，不要有其他内容。
+        `;
+        
+        const aiResponse = await callLocalLLM(prompt);
+        
+        if (aiResponse) {
             // 尝试解析JSON响应
             try {
-                const result = JSON.parse(response);
+                const result = JSON.parse(aiResponse);
                 if (result.valid === false && !result.message) {
                     result.message = "评价内容不符合规范，请修改后重新提交。";
                 }
                 return result;
             } catch (parseError) {
-                console.warn('Gemini API返回格式错误，使用本地审核：', parseError);
-                return localReviewAudit(reviewText, courseId);
+                console.warn('AI审核返回格式错误，使用本地审核：', parseError);
             }
-        } catch (error) {
-            console.warn('Gemini API调用失败，使用本地审核：', error);
-            return localReviewAudit(reviewText, courseId);
         }
+    } catch (error) {
+        console.warn('AI审核调用失败，使用本地审核：', error);
     }
     
     // 使用本地审核

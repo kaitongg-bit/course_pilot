@@ -1,21 +1,56 @@
-// Agent调度总线 - 统一管理所有Agent的调用
+// Agent调度总线 - 统一管理所有Agent的调用（本地LLM版本）
 const matchAgent = require('./matchAgent');
 const summarizeAgent = require('./summarizeAgent');
 const reviewAuditAgent = require('./reviewAuditAgent');
 
-// 主推荐流程：用户输入 → 匹配课程 → 生成摘要
+// 调用本地LLM代理进行智能推荐
+async function callLocalLLMForRecommendation(careerGoal, resumeText) {
+    try {
+        const response = await fetch('http://localhost:5001/api/llm/generate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                career_goal: careerGoal,
+                resume_text: resumeText
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        
+        if (result.error) {
+            throw new Error(result.error);
+        }
+
+        return result;
+    } catch (error) {
+        console.error('本地LLM推荐调用失败:', error);
+        throw error;
+    }
+}
+
+// 主推荐流程：用户输入 → AI智能匹配 → 个性化摘要
 async function recommendCourses(userSkills, userCareerGoal, limit = 8) {
     try {
-        // 1. 匹配课程
-        const matchedCourses = matchAgent.matchCourses(userSkills, userCareerGoal, limit);
+        // 使用本地LLM进行智能推荐
+        const aiResult = await callLocalLLMForRecommendation(userCareerGoal, userSkills);
         
-        // 2. 为每门课程生成个性化摘要
+        // 解析AI推荐结果
+        const { recommended_courses, analysis } = aiResult;
+        
+        // 为每门课程添加个性化摘要
         const coursesWithSummaries = await Promise.all(
-            matchedCourses.map(async (course) => {
+            recommended_courses.map(async (course) => {
                 const summary = await summarizeAgent.generateSummary(userCareerGoal, course);
                 return {
                     ...course,
-                    personalizedSummary: summary
+                    personalizedSummary: summary,
+                    analysis: analysis
                 };
             })
         );
@@ -23,15 +58,40 @@ async function recommendCourses(userSkills, userCareerGoal, limit = 8) {
         return {
             success: true,
             courses: coursesWithSummaries,
-            total: coursesWithSummaries.length
+            total: coursesWithSummaries.length,
+            analysis: analysis
         };
     } catch (error) {
-        console.error('推荐流程错误:', error);
-        return {
-            success: false,
-            error: '推荐系统暂时不可用，请稍后重试。',
-            courses: []
-        };
+        console.error('AI推荐流程错误，使用传统匹配:', error);
+        
+        // 备用：使用传统匹配算法
+        try {
+            const matchedCourses = matchAgent.matchCourses(userSkills, userCareerGoal, limit);
+            
+            const coursesWithSummaries = await Promise.all(
+                matchedCourses.map(async (course) => {
+                    const summary = await summarizeAgent.generateSummary(userCareerGoal, course);
+                    return {
+                        ...course,
+                        personalizedSummary: summary
+                    };
+                })
+            );
+            
+            return {
+                success: true,
+                courses: coursesWithSummaries,
+                total: coursesWithSummaries.length,
+                analysis: '使用传统算法为您推荐课程'
+            };
+        } catch (fallbackError) {
+            console.error('传统匹配也失败:', fallbackError);
+            return {
+                success: false,
+                error: '推荐系统暂时不可用，请稍后重试。',
+                courses: []
+            };
+        }
     }
 }
 
