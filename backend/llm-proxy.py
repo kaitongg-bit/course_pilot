@@ -251,6 +251,14 @@ def summarize_course():
         print(prompt)
         output = llm(prompt, max_tokens=100, temperature=0.9, top_p=0.95, top_k=10)
         summary = output['choices'][0]['text'].strip()
+        import re
+
+        # 只提取出“【推荐语】...”内容，没有推荐语标志就只留第一句话或前80个字
+        m = re.search(r'【推荐语】(.+?)【推荐语】', summary)
+        if m:
+            summary = m.group(1).strip()
+        else:
+            summary = re.split(r'\n|。', summary)[0][:80]
         return jsonify({'status': 'success', 'summary': summary})
     
     except Exception as e:
