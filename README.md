@@ -93,10 +93,12 @@ python download.py
 - In the project’s root directory, run in terminal:
 
 ```
-python llm-proxy.py
+chmod +x start_llm_server.sh
+./start_llm_server.sh
 ```
 
-- Once you see “Local LLM proxy server running on port ...”, you’re good! For port/path errors, Google the terminal message for solutions.
+- If you see “Starting server on port ...”, you’re good! For port/path errors, Google the terminal message for solutions.
+
 
 ***
 
