@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "CMU Course Assistant",
+  "name": "Course Pilot",
   "version": "1.0.0",
   "description": "An intelligent Chrome extension for CMU students to discover and review courses with AI-powered recommendations",
   "action": {
-    "default_title": "CMU Course Assistant",
+    "default_title": "Course Pilot",
     "default_icon": {}
   },
   "side_panel": {

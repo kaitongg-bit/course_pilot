@@ -1,1 +1,9 @@
-@tailwind base; @tailwind components; @tailwind utilities;
+/* src/input.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 测试类 */
+.test {
+  @apply bg-blue-500 text-white p-4;
+}
