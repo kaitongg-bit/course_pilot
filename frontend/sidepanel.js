@@ -212,7 +212,7 @@ async function showRealReviews(courseObj) {
 async function handleLikeClick(event) {
     const btn = event.currentTarget;
     const rowId = btn.getAttribute('data-review-id');
-    const emailHash = ""; // 如需每用户唯一点赞，生成emailHash
+    const emailHash = localStorage.getItem('emailHash') || "";
     if (!rowId) return;
     try{
         const postData = {
