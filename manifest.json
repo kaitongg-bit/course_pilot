@@ -5,7 +5,16 @@
   "description": "An intelligent Chrome extension for CMU students to discover and review courses with AI-powered recommendations",
   "action": {
     "default_title": "Course Pilot",
-    "default_icon": {}
+    "default_icon": {
+      "16": "images/Icon.png",
+      "48": "images/Icon.png",
+      "128": "images/Icon.png"
+    }
+  },
+  "icons": {
+    "16": "images/Icon.png",
+    "48": "images/Icon.png", 
+    "128": "images/Icon.png"
   },
   "side_panel": {
     "default_path": "frontend/sidepanel.html"
