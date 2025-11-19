@@ -70,55 +70,81 @@ async function toggleSummary(courseObj, button) {
     button.textContent = summaryDiv.classList.contains('hidden') ? 'View more' : 'View less';
 }
 
+// 自动查找课程名（根据course_id从Google Sheet查名字）
+async function autofillCourseName(courseId) {
+  if (!courseId) return "";
+  try {
+    const url = API_URL + `?action=search&course_id=${encodeURIComponent(courseId)}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    const reviews = data.data || [];
+    if (reviews.length > 0 && reviews[0].course_name) {
+      return reviews[0].course_name;
+    }
+  } catch (e) {
+    return "";
+  }
+  return "";
+}
+
 // 评价贡献（提交表单）
 async function submitCourseReview() {
-    const courseNum = document.getElementById('reviewCourseCode').value;
-    const courseName = document.getElementById('reviewCourseName')?.value || '';
-    const workload = document.getElementById('reviewWorkload')?.value || '';
-    const workflow = document.getElementById('reviewWorkflow')?.value || '';
-    const interest = document.getElementById('reviewInterest')?.value || '';
-    const utility = document.getElementById('reviewUtility')?.value || '';
-    const overall = document.getElementById('reviewOverall').value;
-    const comment = document.getElementById('inputReviewText').value;
-    const userId = "Anonymous";
-    const emailHash = ""; // 若需要登录后生成唯一EmailHash
+  const courseNum = document.getElementById('reviewCourseCode').value;
+  // 你可以把下面这些采集字段根据你的表单input id自由改名
+  const workload = document.getElementById('reviewWorkload')?.value || '';
+  const workflow = document.getElementById('reviewWorkflow')?.value || '';
+  const interest = document.getElementById('reviewInterest')?.value || '';
+  const utility = document.getElementById('reviewUtility')?.value || '';
+  const overall = document.getElementById('reviewOverall').value;
+  const comment = document.getElementById('inputReviewText').value;
+  const emailHash = localStorage.getItem('emailHash') || "";
+  const userId = emailHash || "Anonymous";
 
-    if (!courseNum || !overall || !comment) {
-        alert("Course number, overall rating, and comment are required!");
-        return;
+  // 前端表单校验
+  if (!courseNum || !overall || !comment) {
+    alert("Course number, overall rating, and comment are required!");
+    return;
+  }
+
+  // 自动查找课程名（数据库里的名字，不用用户手填）
+  const courseName = await autofillCourseName(courseNum);
+
+  // 组装所有要提交的字段
+  const postData = {
+      action: "create",
+      UserID: userId,                // 用户唯一ID(邮箱hash)
+      course_id: courseNum,
+      course_name: courseName,       // 自动补全课程名
+      Workload: workload,
+      Workflow: workflow,
+      InterestRating: interest,
+      UtilityRating: utility,
+      OverallRating: overall,
+      Comment: comment,
+      EmailHash: emailHash           // 用于点赞等功能的hash
+      // 其它字段如有可以补充
+  };
+
+  try {
+    const resp = await fetch(API_URL, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(postData)
+    });
+    const result = await resp.json();
+    if(result.success){
+      alert("Review submitted!");
+      changeView('homeView');
+      // 如有清空表单等操作可以在这里补充
+      // loadUserStatsAndReviews(userId); // 也可提交后刷新个人页面
+    }else{
+      alert("Submit failed: " + (result.error || "Unknown Error"));
     }
-
-    const postData = {
-        action: "create",
-        UserID: userId,
-        course_id: courseNum,
-        course_name: courseName,
-        Workload: workload,
-        Workflow: workflow,
-        InterestRating: interest,
-        UtilityRating: utility,
-        OverallRating: overall,
-        Comment: comment,
-        EmailHash: emailHash
-    };
-
-    try {
-        const resp = await fetch(API_URL, {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify(postData)
-        });
-        const result = await resp.json();
-        if(result.success){
-            alert("Review submitted!");
-            changeView('homeView');
-        }else{
-            alert("Submit failed: " + (result.error || "Unknown Error"));
-        }
-    } catch (e){
-        alert("Network or API error: " + e.message);
-    }
+  } catch (e){
+    alert("Network or API error: " + e.message);
+  }
 }
+
 
 // 展示弹窗评论（仅显示comment，点击展开详情）
 async function showRealReviews(courseObj) {
@@ -376,6 +402,119 @@ document.getElementById('searchBtn').addEventListener('click', async function ()
     resultsDiv.innerHTML = `<div class="text-red-500 py-4">Error loading reviews: ${e.message}</div>`;
   }
 });
+
+
+// 简单Base64 hash
+function hashEmail(email) {
+  return btoa(email.trim().toLowerCase());
+}
+
+function showAvatar(email) {
+  const avatarDiv = document.getElementById('profileAvatar');
+  avatarDiv.textContent = email && email[0] ? email[0].toUpperCase() : "?";
+}
+
+function updateUserStatus() {
+  const email = localStorage.getItem('email');
+  const hash = localStorage.getItem('emailHash');
+  document.getElementById('userIdDisplay').textContent = hash || "Not logged in";
+  if (email && hash) {
+    document.getElementById('userEmailSpan').textContent = email;
+    document.getElementById('userIdSpan').textContent = hash;
+    showAvatar(email);
+    document.getElementById('loginBlock').style.display = 'none';
+    document.getElementById('userInfoBlock').style.display = 'flex';
+    document.getElementById('logoutBtn').style.display = 'inline-block';
+    loadUserStatsAndReviews(hash);
+  } else {
+    document.getElementById('loginBlock').style.display = '';
+    document.getElementById('userInfoBlock').style.display = 'none';
+    document.getElementById('myReviewsSection').innerHTML = "";
+    document.getElementById('totalReviews').textContent = "0";
+    document.getElementById('totalLikes').textContent = "0";
+    document.getElementById('profileBrief').innerHTML = `<div class="text-gray-500 text-sm mb-2">Sign in above to see your stats.</div>`;
+  }
+}
+
+document.getElementById('saveEmailBtn').onclick = () => {
+  const email = document.getElementById('userEmailInput').value.trim();
+  if (email) {
+    const hash = hashEmail(email);
+    localStorage.setItem('email', email);
+    localStorage.setItem('emailHash', hash);
+    updateUserStatus();
+    alert("Sign in successful!");
+  }
+};
+
+document.getElementById('logoutBtn').onclick = () => {
+  localStorage.removeItem('email');
+  localStorage.removeItem('emailHash');
+  updateUserStatus();
+};
+
+async function loadUserStatsAndReviews(emailHash) {
+  try {
+    const url = API_URL + `?action=get_profile&email_hash=${encodeURIComponent(emailHash)}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    const reviews = data.reviews || [];
+    const totalReviews = reviews.length;
+    const totalLikes = data.total_likes || 0;
+    document.getElementById('totalReviews').textContent = totalReviews;
+    document.getElementById('totalLikes').textContent = totalLikes;
+
+    // 渲染个人评论卡片
+    document.getElementById('myReviewsSection').innerHTML = reviews.map((r, i) => `
+      <div class="review-card bg-white rounded-lg shadow p-4 mb-2 border border-gray-200 transition hover:shadow-lg">
+        <div class="text-gray-800 text-base leading-relaxed mb-2">${r.Comment || ""}</div>
+        <div class="flex items-center gap-3 mt-2">
+          <span class="text-xs text-green-800 bg-green-50 rounded px-2 py-1">👍 ${r.LikeCount || 0} Likes</span>
+          <button
+            class="toggle-detail-btn text-xs text-blue-600 underline"
+            data-idx="${i}">
+            Show Details
+          </button>
+        </div>
+        <div class="extra-detail hidden text-gray-600 text-sm mt-2">
+          <div>Course: ${r.course_name || r.course_id || ''}</div>
+          <div>Workload: ${r.Workload || ""}</div>
+          <div>Workflow: ${r.Workflow || ""}</div>
+          <div>Interest: ${r.InterestRating || ""} | Utility: ${r.UtilityRating || ""} | Overall: ${r.OverallRating || ""}</div>
+        </div>
+      </div>
+    `).join('');
+
+    // 展开/收起详情
+    setTimeout(() => {
+      document.querySelectorAll('#myReviewsSection .toggle-detail-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+          const thisCard = btn.closest('.review-card');
+          const detailSection = thisCard.querySelector('.extra-detail');
+          if (detailSection.classList.contains('hidden')) {
+            detailSection.classList.remove('hidden');
+            btn.textContent = 'Hide Details';
+          } else {
+            detailSection.classList.add('hidden');
+            btn.textContent = 'Show Details';
+          }
+        });
+      });
+    }, 100);
+
+    // 简要数据
+    document.getElementById('profileBrief').innerHTML = `
+      <div class="text-green-700 text-sm mb-1">Welcome, ${localStorage.getItem('email')}</div>
+      <div class="text-gray-600 text-xs">Your hash: ${emailHash}</div>
+    `;
+  } catch (e) {
+    document.getElementById('myReviewsSection').innerHTML = `<div class="text-red-500">Error loading profile: ${e.message}</div>`;
+  }
+}
+
+// 页面初始化时自动刷新
+document.addEventListener('DOMContentLoaded', updateUserStatus);
+
 
 // 初始化所有绑定
 document.addEventListener('DOMContentLoaded', () => {

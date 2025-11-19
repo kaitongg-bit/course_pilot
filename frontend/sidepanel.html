@@ -80,30 +80,51 @@
             <div id="searchResults" class="space-y-4"></div>
         </section>
         
-        <!-- Profile -->
         <section id="profileView" class="view-content hidden">
             <h2 class="text-xl font-bold mb-4 text-blue-700">My Contributor Profile</h2>
             <div class="p-4 bg-white rounded-xl shadow-lg border-t-4 border-green-500">
-                <div class="p-4 bg-gray-50 rounded-lg mb-4">
-                    <p class="text-sm font-medium text-gray-600">Your Anonymous Contributor ID:</p>
-                    <p class="text-xs break-all mt-1" id="userIdDisplay">Loading...</p>
+                <!-- 登录区与头像 -->
+                <div id="userInfoBlock" class="flex items-center gap-3 mb-4" style="display:none;">
+                    <div id="profileAvatar"
+                        class="w-12 h-12 flex items-center justify-center rounded-full bg-blue-400 text-white text-2xl font-bold"></div>
+                    <div class="flex flex-col">
+                        <span id="userEmailSpan" class="text-sm text-gray-700"></span>
+                        <span id="userIdSpan" class="text-xs text-gray-500"></span>
+                    </div>
+                    <button id="logoutBtn"
+                        class="ml-3 px-2 py-1 bg-gray-200 text-gray-700 rounded">Logout</button>
                 </div>
+                <div id="loginBlock">
+                    <input type="email" id="userEmailInput" placeholder="Enter your email"
+                        class="w-full p-2 border rounded focus:ring-blue-500" />
+                    <button id="saveEmailBtn"
+                        class="px-3 py-2 bg-blue-500 mt-1 text-white rounded">Sign In</button>
+                </div>
+                <p class="text-sm font-medium text-gray-600 mt-3">Your Contributor Hash:</p>
+                <p class="text-xs break-all mt-1" id="userIdDisplay">Not logged in</p>
+                <div id="profileBrief" class="my-4"></div>
                 <h3 class="text-lg font-semibold mb-3 text-gray-700">🎖️ My Badges</h3>
-                <div class="flex flex-wrap gap-2">
+                <div class="flex flex-wrap gap-2" id="userBadges">
                     <span class="px-3 py-1 bg-yellow-100 text-yellow-800 text-sm rounded-full">Insight Contributor</span>
                     <span class="px-3 py-1 bg-green-100 text-green-800 text-sm rounded-full">Master Structurer</span>
                 </div>
                 <h3 class="text-lg font-semibold mt-6 mb-3 text-gray-700">📊 Contribution Impact</h3>
                 <div class="flex justify-between p-2 bg-blue-50 rounded-lg">
                     <span class="text-sm">Total Reviews Submitted:</span>
-                    <span class="font-bold text-blue-600">0</span>
+                    <span class="font-bold text-blue-600" id="totalReviews">0</span>
                 </div>
                 <div class="flex justify-between p-2 bg-green-50 rounded-lg">
-                    <span class="text-sm">Total Citations (Impact):</span>
-                    <span class="font-bold text-green-600">0</span>
+                    <span class="text-sm">Total Likes Received:</span>
+                    <span class="font-bold text-green-600" id="totalLikes">0</span>
                 </div>
+
+                <!-- 我的所有评论区 -->
+                <h3 class="text-lg font-semibold mt-6 mb-3 text-gray-700">🗂️ My Reviews</h3>
+                <div id="myReviewsSection" class="space-y-4 max-h-[40vh] overflow-y-auto"></div>
             </div>
         </section>
+
+
         
         <!-- Contribution (Review表单) -->
         <section id="contributionView" class="view-content hidden">
@@ -115,9 +136,6 @@
                 </p>
                 <label for="reviewCourseCode" class="block text-sm font-medium text-gray-600 mb-1">Course Number*</label>
                 <input type="text" id="reviewCourseCode" placeholder="e.g., 15-445" class="w-full p-2 border rounded-lg mb-3 focus:ring-green-500">
-
-                <label for="reviewCourseName" class="block text-sm font-medium text-gray-600 mb-1">Course Name</label>
-                <input type="text" id="reviewCourseName" placeholder="e.g., Database Systems" class="w-full p-2 border rounded-lg mb-3 focus:ring-green-500">
 
                 <label for="reviewWorkload" class="block text-sm font-medium text-gray-600 mb-1">Workload (number only, hr/week)</label>
                 <input type="text" id="reviewWorkload" placeholder="e.g., 10" class="w-full p-2 border rounded-lg mb-3 focus:ring-green-500">
