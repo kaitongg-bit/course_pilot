@@ -1,3 +1,5 @@
+const API_URL = "https://script.google.com/macros/s/AKfycbzNPXIkV94kFCUk7hAxsg0xlva3QgrvHdqjuLNwgu48ILWvJmt72wiv5YXSPb7QcUIPvw/exec";
+
 function changeView(viewId) {
     document.querySelectorAll('.view-content').forEach(view => {
         view.classList.add('hidden');
@@ -18,6 +20,16 @@ function bindEvents() {
             if (targetView) changeView(targetView);
         });
     });
+
+    // 绑定提交课程评价
+    const submitBtn = document.getElementById('submitReviewBtn');
+    submitBtn?.addEventListener('click', submitCourseReview);
+
+    // 绑定关闭弹窗
+    const closeBtn = document.getElementById('closeReviewBtn');
+    if (closeBtn) {
+        closeBtn.onclick = closeReviewModal;
+    }
 }
 
 function getStarRatingFromMatchPct(matching_percentage) {
@@ -58,40 +70,173 @@ async function toggleSummary(courseObj, button) {
     button.textContent = summaryDiv.classList.contains('hidden') ? 'View more' : 'View less';
 }
 
-function showRealReviews(courseObj) {
-    const modal = document.getElementById('reviewModal');
-    const modalTitle = document.getElementById('modalCourseTitle');
-    const reviewContent = document.getElementById('reviewContent');
-    const sampleReviews = [
-        "The instructor is highly professional, with numerous real-world case studies, delivering far more than expected!",
-        "Suitable for beginners and intermediate learners, with assignments of moderate difficulty and prompt feedback from teaching assistants.",
-        "Course content is closely aligned with industry needs, enabling immediate application to real-world projects upon completion."
-    ];
-    modalTitle.textContent = `Course reviews - ${courseObj.course_name}`;
-    reviewContent.innerHTML = sampleReviews.map(r =>
-        `<div class="p-3 bg-gray-100 rounded text-gray-800">${r}</div>`
-    ).join('');
-    modal.style.display = 'flex';
+// 评价贡献（提交表单）
+async function submitCourseReview() {
+    const courseNum = document.getElementById('reviewCourseCode').value;
+    const courseName = document.getElementById('reviewCourseName')?.value || '';
+    const workload = document.getElementById('reviewWorkload')?.value || '';
+    const workflow = document.getElementById('reviewWorkflow')?.value || '';
+    const interest = document.getElementById('reviewInterest')?.value || '';
+    const utility = document.getElementById('reviewUtility')?.value || '';
+    const overall = document.getElementById('reviewOverall').value;
+    const comment = document.getElementById('inputReviewText').value;
+    const userId = "Anonymous";
+    const emailHash = ""; // 若需要登录后生成唯一EmailHash
+
+    if (!courseNum || !overall || !comment) {
+        alert("Course number, overall rating, and comment are required!");
+        return;
+    }
+
+    const postData = {
+        action: "create",
+        UserID: userId,
+        course_id: courseNum,
+        course_name: courseName,
+        Workload: workload,
+        Workflow: workflow,
+        InterestRating: interest,
+        UtilityRating: utility,
+        OverallRating: overall,
+        Comment: comment,
+        EmailHash: emailHash
+    };
+
+    try {
+        const resp = await fetch(API_URL, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(postData)
+        });
+        const result = await resp.json();
+        if(result.success){
+            alert("Review submitted!");
+            changeView('homeView');
+        }else{
+            alert("Submit failed: " + (result.error || "Unknown Error"));
+        }
+    } catch (e){
+        alert("Network or API error: " + e.message);
+    }
+}
+
+// 展示弹窗评论（仅显示comment，点击展开详情）
+async function showRealReviews(courseObj) {
+  const modal = document.getElementById('reviewModal');
+  const modalTitle = document.getElementById('modalCourseTitle');
+  const reviewContent = document.getElementById('reviewContent');
+  modalTitle.textContent = `Course Reviews`;
+
+  try {
+    const searchUrl = API_URL + `?action=search&course_id=${encodeURIComponent(courseObj.course_id)}`;
+    const response = await fetch(searchUrl);
+    const data = await response.json();
+    const reviews = data.data || [];
+    if (reviews.length === 0) {
+      reviewContent.innerHTML = "<div class='text-gray-500'>No reviews yet.</div>";
+    } else {
+      reviewContent.innerHTML = reviews.map((r, i) => `
+        <div class="review-card bg-white rounded-lg shadow p-4 mb-2 border border-gray-200 transition hover:shadow-lg">
+          <div class="text-gray-800 text-base leading-relaxed mb-2">${r.Comment || ""}</div>
+          <div class="flex items-center gap-3 mt-2">
+            <button
+                class="like-btn py-1 px-2 rounded bg-gray-200 hover:bg-green-100 text-green-600 text-sm flex items-center"
+                data-review-id="${r.RowID}">
+                👍 <span class="ml-1 like-count">${r.LikeCount || 0}</span>
+            </button>
+            <button
+                class="toggle-detail-btn text-xs text-blue-600 underline mb-1"
+                data-idx="${i}">
+                Show Details
+            </button>
+          </div>
+          <div class="extra-detail hidden text-gray-600 text-sm mt-2">
+            <div>Course: ${r.course_name || r.course_id || ''}</div>
+            <div>Workload: ${r.Workload || ""}</div>
+            <div>Workflow: ${r.Workflow || ""}</div>
+            <div>Interest: ${r.InterestRating || ""} | Utility: ${r.UtilityRating || ""} | Overall: ${r.OverallRating || ""}</div>
+          </div>
+        </div>
+      `).join('');
+        
+      // 绑定展开/收起事件（推荐addEventListener更安全）
+      setTimeout(() => {
+        document.querySelectorAll('.toggle-detail-btn').forEach(btn => {
+          btn.addEventListener('click', function () {
+            const thisCard = btn.closest('.review-card');
+            const detailSection = thisCard.querySelector('.extra-detail');
+            if (detailSection.classList.contains('hidden')) {
+              detailSection.classList.remove('hidden');
+              btn.textContent = 'Hide Details';
+            } else {
+              detailSection.classList.add('hidden');
+              btn.textContent = 'Show Details';
+            }
+          });
+        });
+      }, 100); // 稍微加长一点确保DOM已插入
+    }
+  } catch (e) {
+    reviewContent.innerHTML = `<div class="text-red-500">Error loading reviews: ${e.message}</div>`;
+  }
+  modal.style.display = 'flex';
+}
+
+
+async function handleLikeClick(event) {
+    const btn = event.currentTarget;
+    const rowId = btn.getAttribute('data-review-id');
+    const emailHash = ""; // 如需每用户唯一点赞，生成emailHash
+    if (!rowId) return;
+    try{
+        const postData = {
+            action: "toggle_like",
+            RowID: rowId,
+            EmailHash: emailHash
+        };
+        const resp = await fetch(API_URL, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(postData)
+        });
+        const result = await resp.json();
+        if(result.success){
+            btn.querySelector('.like-count').textContent = result.new_count;
+            btn.classList.toggle('text-green-700', result.is_liked);
+        }else{
+            alert("Like failed!");
+        }
+    }catch(e){
+        alert("Network error: " + e.message);
+    }
+}
+
+function bindLikeButtons() {
+    document.querySelectorAll('.like-btn').forEach(btn => {
+        btn.removeEventListener('click', handleLikeClick); // 保证不重复绑定
+        btn.addEventListener('click', handleLikeClick);
+    });
 }
 
 function closeReviewModal() {
-    document.getElementById('reviewModal').style.display = 'none';
+  document.getElementById('reviewModal').style.display = 'none';
 }
 
+// 推荐课程相关逻辑不动
 async function generateRecommendations() {
     try {
         const careerGoal = document.getElementById('careerGoal').value;
         const skillsText = document.getElementById('skillsInput').value;
         const resumeText = document.getElementById('resumeInput').value;
         if (!careerGoal.trim()) {
-            alert('请输入职业目标');
+            alert('enter your target career goal');
             return;
         }
         const courseList = document.getElementById('courseList');
         courseList.innerHTML = `
             <div class="text-center py-8">
                 <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <p class="mt-2 text-gray-600">AI正在分析您的职业目标并推荐课程...</p>
+                <p class="mt-2 text-gray-600">AI is generating recommendations...</p>
             </div>
         `;
         const response = await fetch('http://localhost:3002/api/courses/match', {
@@ -148,11 +293,6 @@ async function generateRecommendations() {
                 showRealReviews(courses[idx]);
             });
         });
-        // 关闭评价弹窗
-        const closeBtn = document.getElementById('closeReviewBtn');
-        if (closeBtn) {
-            closeBtn.onclick = closeReviewModal;
-        }
     } catch (error) {
         const courseList = document.getElementById('courseList');
         courseList.innerHTML = `
@@ -168,6 +308,76 @@ async function generateRecommendations() {
     }
 }
 
+document.getElementById('searchBtn').addEventListener('click', async function () {
+  const courseInput = document.getElementById('courseSearch');
+  const courseNum = courseInput.value.trim();
+  const resultsDiv = document.getElementById('searchResults');
+  resultsDiv.innerHTML = ""; // 清空之前结果
+
+  if (!courseNum) {
+    resultsDiv.innerHTML = `<div class="bg-yellow-50 text-yellow-800 p-3 rounded">Please input a course number (e.g., 15-445)!</div>`;
+    return;
+  }
+
+  try {
+    const url = API_URL + `?action=search&course_id=${encodeURIComponent(courseNum)}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    const reviews = data.data || [];
+    if (reviews.length === 0) {
+      resultsDiv.innerHTML = `<div class="text-gray-500 py-4">No reviews found for <b>${courseNum}</b>.</div>`;
+    } else {
+      resultsDiv.innerHTML = reviews.map((r, i) => `
+        <div class="review-card bg-white rounded-lg shadow p-4 mb-2 border border-gray-200 transition hover:shadow-lg">
+          <div class="text-gray-800 text-base leading-relaxed mb-2">${r.Comment || ""}</div>
+          <div class="flex items-center gap-3 mt-2">
+            <button
+              class="like-btn py-1 px-2 rounded bg-gray-200 hover:bg-green-100 text-green-600 text-sm flex items-center"
+              data-review-id="${r.RowID}">
+              👍 <span class="ml-1 like-count">${r.LikeCount || 0}</span>
+            </button>
+            <button
+              class="toggle-detail-btn text-xs text-blue-600 underline"
+              data-idx="${i}">
+              Show Details
+            </button>
+          </div>
+          <div class="extra-detail hidden text-gray-600 text-sm mt-2">
+            <div>Course: ${r.course_name || r.course_id || ''}</div>
+            <div>Workload: ${r.Workload || ""}</div>
+            <div>Workflow: ${r.Workflow || ""}</div>
+            <div>Interest: ${r.InterestRating || ""} | Utility: ${r.UtilityRating || ""} | Overall: ${r.OverallRating || ""}</div>
+          </div>
+        </div>
+      `).join('');
+
+      // 绑定展开/收起和点赞事件
+      setTimeout(() => {
+        document.querySelectorAll('#searchResults .toggle-detail-btn').forEach(btn => {
+          btn.addEventListener('click', function () {
+            const thisCard = btn.closest('.review-card');
+            const detailSection = thisCard.querySelector('.extra-detail');
+            if (detailSection.classList.contains('hidden')) {
+              detailSection.classList.remove('hidden');
+              btn.textContent = 'Hide Details';
+            } else {
+              detailSection.classList.add('hidden');
+              btn.textContent = 'Show Details';
+            }
+          });
+        });
+
+        document.querySelectorAll('#searchResults .like-btn').forEach(btn => {
+          btn.addEventListener('click', handleLikeClick);
+        });
+      }, 100);
+    }
+  } catch (e) {
+    resultsDiv.innerHTML = `<div class="text-red-500 py-4">Error loading reviews: ${e.message}</div>`;
+  }
+});
+
+// 初始化所有绑定
 document.addEventListener('DOMContentLoaded', () => {
     bindEvents();
 });
