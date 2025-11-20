@@ -248,7 +248,6 @@ def summarize_course():
         课程关键词：{course.get("keywords", "无关键词")}
         课程描述：{course.get("description", "")}
         """
-        print(prompt)
         output = llm(prompt, max_tokens=100, temperature=0.9, top_p=0.95, top_k=10)
         summary = output['choices'][0]['text'].strip()
         import re
@@ -266,28 +265,45 @@ def summarize_course():
 
 
 @app.route('/api/review/audit', methods=['POST'])
-def audit_review(self, review_text):
-    """审核用户评价内容"""
+def audit_review():
     try:
         review_data = request.json
-        # 调用LLM审核评价（示例）
+        review_text = review_data.get("review_text", "")
+        print("收到审核请求：", review_text)
         prompt = f"""
-    Please perform an automatic AI audit of the given course review content based on the following rules:
-    1. If it contains rude, vulgar, or foul language (e.g., "idiot", "go to hell"), it fails the audit.
-    2. If the number of characters is less than 15, it fails the audit with the reason "Content is too brief".
-    3. Otherwise, it passes the audit, regardless of whether it expresses criticism or praise.
-    Return only: {{"Audit Status": "Pass"/"Fail", "Reason": "..."}}. Review text: {review_text}
-    """
-        response = llm.generate([{"role":"user","content": prompt}])
-        # Parse response.content as a dict
-        import json
+        Please perform an automatic AI audit of the given course review content. Important: Only output ONE strict JSON, and NOTHING else.
+        Rules:
+        1. If it contains rude, vulgar, or foul language, fail.
+        2. If less than 15 characters, fail, reason 'Content is too brief'.
+        3. Else pass.
+        Example output: {{"Audit Status": "Pass"/"Fail", "Reason": "..."}}
+        Review text: {review_text}
+        """
+
+        output = llm(prompt, max_tokens=200, temperature=0.5, top_p=0.95, top_k=10)
+        response_text = output['choices'][0]['text'].strip()
+        print("LLM返回内容：", response_text)
+
+        # 正则找最后一个JSON片段
+        import re, json
         try:
-            result = json.loads(response.content)
-        except Exception:
-             result = {"Audit Status": "Fail", "Reason": "AI failed to correctly determine"}
-        return result
+            json_matches = re.findall(r'\{.*?"Audit Status".*?\}', response_text, re.DOTALL)
+            if json_matches:
+                last_json = json_matches[-1]
+                result = json.loads(last_json)
+                print("解析后result：", result)
+            else:
+                raise Exception("No valid JSON found in LLM response!")
+            if "Audit Status" not in result or "Reason" not in result:
+                raise Exception("Missing required JSON keys")
+        except Exception as ex:
+            print("AI JSON解析失败:", ex)
+            result = {"Audit Status": "Fail", "Reason": "AI failed to generate valid JSON: " + str(response_text)}
+        return jsonify(result), 200
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print("顶层异常：", e)
+        return jsonify({'Audit Status':"Fail", 'Reason': str(e)}), 500
+
 
 @app.route('/api/health', methods=['GET'])
 def health_check():

@@ -69,8 +69,6 @@ async function toggleSummary(courseObj, button) {
     summaryDiv.classList.toggle('hidden');
     button.textContent = summaryDiv.classList.contains('hidden') ? 'View more' : 'View less';
 }
-
-// 自动查找课程名（根据course_id从Google Sheet查名字）
 async function autofillCourseName(courseId) {
   if (!courseId) return "";
   try {
@@ -87,10 +85,8 @@ async function autofillCourseName(courseId) {
   return "";
 }
 
-// 评价贡献（提交表单）
 async function submitCourseReview() {
   const courseNum = document.getElementById('reviewCourseCode').value;
-  // 你可以把下面这些采集字段根据你的表单input id自由改名
   const workload = document.getElementById('reviewWorkload')?.value || '';
   const workflow = document.getElementById('reviewWorkflow')?.value || '';
   const interest = document.getElementById('reviewInterest')?.value || '';
@@ -100,29 +96,46 @@ async function submitCourseReview() {
   const emailHash = localStorage.getItem('emailHash') || "";
   const userId = emailHash || "Anonymous";
 
-  // 前端表单校验
   if (!courseNum || !overall || !comment) {
     alert("Course number, overall rating, and comment are required!");
     return;
   }
 
-  // 自动查找课程名（数据库里的名字，不用用户手填）
+  // 1. —— 新加审核API步骤
+  let auditResult;
+  try {
+    const respAudit = await fetch('http://localhost:3002/api/review/audit', {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ review_text: comment })
+    });
+    auditResult = await respAudit.json();
+  } catch (e) {
+    alert("AI审核接口异常，暂时无法提交！");
+    return;
+  }
+  // 2. —— 判断审核结果
+  if (auditResult["Audit Status"] !== "Pass") {
+    alert("内容未通过审核：" + auditResult["Reason"]);
+    return;
+  }
+
+  // 3. —— 自动查找课程名
   const courseName = await autofillCourseName(courseNum);
 
-  // 组装所有要提交的字段
+  // 4. —— 组装提交数据，继续原本的Google Sheet流程
   const postData = {
-      action: "create",
-      UserID: userId,                // 用户唯一ID(邮箱hash)
-      course_id: courseNum,
-      course_name: courseName,       // 自动补全课程名
-      Workload: workload,
-      Workflow: workflow,
-      InterestRating: interest,
-      UtilityRating: utility,
-      OverallRating: overall,
-      Comment: comment,
-      EmailHash: emailHash           // 用于点赞等功能的hash
-      // 其它字段如有可以补充
+    action: "create",
+    UserID: userId,
+    course_id: courseNum,
+    course_name: courseName,
+    Workload: workload,
+    Workflow: workflow,
+    InterestRating: interest,
+    UtilityRating: utility,
+    OverallRating: overall,
+    Comment: comment,
+    EmailHash: emailHash
   };
 
   try {
@@ -135,8 +148,6 @@ async function submitCourseReview() {
     if(result.success){
       alert("Review submitted!");
       changeView('homeView');
-      // 如有清空表单等操作可以在这里补充
-      // loadUserStatsAndReviews(userId); // 也可提交后刷新个人页面
     }else{
       alert("Submit failed: " + (result.error || "Unknown Error"));
     }
@@ -144,6 +155,7 @@ async function submitCourseReview() {
     alert("Network or API error: " + e.message);
   }
 }
+
 
 
 // 展示弹窗评论（仅显示comment，点击展开详情）
