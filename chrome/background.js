@@ -1,125 +1,131 @@
-// 背景服务工作者 - 处理浏览器动作和命令 (Manifest V3)
+// chrome/background.js
+// --------------------------------------------------
+// Simple background service worker for Course Pilot
+// Bridges messages from the side panel to the local
+// Flask backend running on http://127.0.0.1:3002
+// --------------------------------------------------
 
-// 安装事件
+console.log("Course Pilot background service worker loaded");
+
+// Open the side panel when the extension icon is clicked
 chrome.runtime.onInstalled.addListener(() => {
-    console.log('CMU Course Assistant extension installed');
-    
-    // 设置默认存储值
-    chrome.storage.local.get(['settings'], (result) => {
-        if (!result.settings) {
-            const defaultSettings = {
-                theme: 'light',
-                language: 'en',
-                autoTranslation: true,
-                coursePreferences: {
-                    difficulty: 'all',
-                    department: 'all',
-                    showMatchScores: true
-                }
-            };
-            chrome.storage.local.set({ settings: defaultSettings });
-        }
-    });
-    
-    // 设置默认用户资料
-    chrome.storage.local.get(['userProfile'], (result) => {
-        if (!result.userProfile) {
-            const defaultProfile = {
-                name: 'CMU Student',
-                goal: 'Learn new skills and advance my career',
-                skills: ['Programming', 'Mathematics', 'Data Analysis'],
-                interests: ['AI', 'Machine Learning', 'Software Development'],
-                experienceLevel: 'intermediate'
-            };
-            chrome.storage.local.set({ userProfile: defaultProfile });
-        }
-    });
+  console.log("Course Pilot installed");
+
+  if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
+    chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+  }
 });
 
-// 处理浏览器动作点击 - 打开侧边栏
-chrome.action.onClicked.addListener((tab) => {
-    console.log('Extension icon clicked - opening side panel');
-    
-    // 打开侧边栏
-    chrome.sidePanel.open({ windowId: tab.windowId })
-        .then(() => {
-            console.log('Side panel opened successfully');
-        })
-        .catch((error) => {
-            console.error('Failed to open side panel:', error);
-            // 如果侧边栏打开失败，显示一个通知
-            chrome.notifications.create({
-                type: 'basic',
-                iconUrl: 'images/icon-128.svg',
-                title: 'CMU Course Assistant',
-                message: 'Click the extension icon to open the course browser'
-            });
+// (Optional) log when the side panel is shown
+if (chrome.sidePanel && chrome.sidePanel.onShown) {
+  chrome.sidePanel.onShown.addListener(() => {
+    console.log("Side panel opened");
+  });
+}
+
+// Helper: POST JSON to the local backend and return parsed payload
+async function postJson(path, body) {
+  const url = `http://127.0.0.1:3002${path}`;
+  console.log("[Background] POST", url, "payload:", body);
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+
+  let payload = null;
+  try {
+    payload = await res.json();
+  } catch (e) {
+    console.warn("[Background] Response is not valid JSON", e);
+  }
+
+  if (!res.ok) {
+    const msg =
+      (payload && payload.error) || `HTTP ${res.status} while calling ${path}`;
+    throw new Error(msg);
+  }
+
+  return payload;
+}
+
+// Listen for messages from the side panel UI
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!message || !message.type) {
+    return; // ignore unknown messages
+  }
+
+  // -------------------------------------------
+  // MATCH_COURSES: return normalized course list
+  // -------------------------------------------
+  if (message.type === "MATCH_COURSES") {
+    console.log("Background received: MATCH_COURSES");
+
+    postJson("/api/courses/match", message.payload)
+      .then((payload) => {
+        console.log("[Background] MATCH_COURSES payload:", payload);
+
+        // Normalize to an array of courses no matter what shape the backend uses
+        let courses = [];
+
+        if (Array.isArray(payload?.courses)) {
+          courses = payload.courses;
+        } else if (Array.isArray(payload?.matches)) {
+          courses = payload.matches;
+        } else if (Array.isArray(payload)) {
+          courses = payload;
+        } else if (payload && Array.isArray(payload.results)) {
+          courses = payload.results;
+        }
+
+        // Always send both a top-level `courses` AND a nested `data.courses`
+        // so the React UI can safely do either `resp.courses.map` or
+        // `resp.data.courses.map` without crashing.
+        sendResponse({
+          ok: true,
+          courses,
+          data: { courses },
         });
+      })
+      .catch((err) => {
+        console.error("[Background] MATCH_COURSES backend error:", err);
+        sendResponse({
+          ok: false,
+          error: String(err && err.message ? err.message : err),
+        });
+      });
+
+    // Keep the message channel open for the async response
+    return true;
+  }
+
+  // -------------------------------------------
+  // SUMMARIZE_COURSE: proxy to backend summarizer
+  // -------------------------------------------
+  if (message.type === "SUMMARIZE_COURSE") {
+    console.log("Background received: SUMMARIZE_COURSE");
+
+    postJson("/api/courses/summarize", message.payload)
+      .then((payload) => {
+        console.log("[Background] SUMMARIZE_COURSE payload:", payload);
+        sendResponse({
+          ok: true,
+          data: payload,
+        });
+      })
+      .catch((err) => {
+        console.error("[Background] SUMMARIZE_COURSE backend error:", err);
+        sendResponse({
+          ok: false,
+          error: String(err && err.message ? err.message : err),
+        });
+      });
+
+    return true;
+  }
+
+  // Unknown message type – ignore
+  console.warn("[Background] Unknown message type:", message.type);
 });
 
-// 处理来自内容脚本和弹出窗口的消息
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    console.log('Received message:', request.type);
-    
-    switch (request.type) {
-        case 'GET_USER_PROFILE':
-            // 获取用户资料
-            chrome.storage.local.get(['userProfile'], (result) => {
-                sendResponse(result.userProfile || {});
-            });
-            return true;
-            
-        case 'UPDATE_USER_PROFILE':
-            // 更新用户资料
-            chrome.storage.local.set({ userProfile: request.profile }, () => {
-                sendResponse({ success: true });
-            });
-            return true;
-            
-        case 'OPEN_SIDEPANEL':
-            // 打开侧边栏
-            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-                if (tabs[0]) {
-                    chrome.sidePanel.open({ windowId: tabs[0].windowId })
-                        .then(() => {
-                            sendResponse({ success: true });
-                        })
-                        .catch((error) => {
-                            sendResponse({ success: false, error: error.message });
-                        });
-                } else {
-                    sendResponse({ success: false, error: 'No active tab found' });
-                }
-            });
-            return true;
-            
-        case 'VIEW_PROFILE':
-            // 查看资料（可以在这里添加导航逻辑）
-            sendResponse({ success: true });
-            return true;
-            
-        case 'REFRESH_COURSES':
-            // 刷新课程（这里可以添加实际的刷新逻辑）
-            console.log('Refreshing courses...');
-            sendResponse({ success: true });
-            return true;
-            
-        default:
-            console.log('Unknown message type:', request.type);
-            sendResponse({ success: false, error: 'Unknown message type' });
-    }
-});
-
-// 简单的健康检查
-chrome.runtime.onStartup.addListener(() => {
-    console.log('Extension starting up');
-});
-
-// 处理错误（防止服务工作者崩溃）
-self.addEventListener('error', (event) => {
-    console.error('Service worker error:', event.error);
-});
-
-self.addEventListener('unhandledrejection', (event) => {
-    console.error('Unhandled promise rejection:', event.reason);
-});

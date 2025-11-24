@@ -1,334 +1,421 @@
 #!/usr/bin/env python3
 """
-本地LLM代理服务器 - 基于llama.cpp和Qwen模型
-模仿HW5_AGENT.ipynb的功能，提供课程推荐和摘要服务
+Very simple, robust course-matching backend for Course Pilot.
+
+- Loads courses from ../courses.json (or backend/courses.json as fallback)
+- Does *not* call any LLMs
+- Uses super-safe string handling (no regex on non-strings)
+- Returns: {"courses": [...]} for /api/courses/match
 """
 
-import os
+from __future__ import annotations
+
+import csv
 import json
-from flask import Flask, request, jsonify, send_from_directory
-from flask_cors import CORS
-import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-import re
-import nltk
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-from llama_cpp import Llama
-llm = Llama(
-    model_path="models/Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
-    n_ctx=2048,
-    n_threads=8,
-    verbose=False
-)
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
 
-# 确保nltk数据已下载
-try:
-    nltk.data.find('corpora/stopwords')
-except LookupError:
-    import ssl
-    try:
-        _create_unverified_https_context = ssl._create_unverified_context
-    except AttributeError:
-        pass
-    else:
-        ssl._create_default_https_context = _create_unverified_https_context
-    nltk.download('stopwords', quiet=True)
-
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt', quiet=True)
+from flask import Flask, jsonify, request
 
 app = Flask(__name__)
-CORS(app)
-PORT = 3002
 
-# 加载课程数据
-COURSES_FILE = 'courses.json'
+# ---------------------------------------------------------------------
+# Loading course data
+# ---------------------------------------------------------------------
 
-class CourseRecommender:
-    def __init__(self):
-        self.courses = self.load_courses()
-        self.vectorizer = TfidfVectorizer()
-        self.tfidf_matrix = None
-        self._prepare_tfidf()
+
+
+
+
+def load_courses() -> List[Dict[str, Any]]:
+    """Load courses from cmu_labeled_llm_final.csv"""
+    backend_dir = Path(__file__).resolve().parent
+    repo_root = backend_dir.parent
+
+    csv_path = repo_root / "cmu_labeled_llm_final.csv"
     
-    def load_courses(self):
-        """加载课程数据"""
-        try:
-            with open(COURSES_FILE, 'r', encoding='utf-8') as f:
-                courses = json.load(f)
-            print(f"成功加载 {len(courses)} 门课程")
-            return courses
-        except Exception as e:
-            print(f"加载课程数据失败: {e}")
-            return []
-    
-    def _prepare_tfidf(self):
-        """准备TF-IDF矩阵"""
-        if not self.courses:
-            return
-        
-        # 预处理课程文本
-        course_texts = []
-        for course in self.courses:
-            text = f"{course.get('course_name', '')} {course.get('description', '')} {course.get('prerequisites', '')}"
-            course_texts.append(self.preprocess_text(text))
-        
-        # 创建TF-IDF矩阵
-        self.tfidf_matrix = self.vectorizer.fit_transform(course_texts)
-    
-    def preprocess_text(self, text):
-        """文本预处理"""
-        if not text:
-            return ""
-        text = text.lower()
-        text = re.sub(r'[^a-zA-Z0-9\s]', '', text)
-        tokens = text.split()
-        stop_words = set(stopwords.words('english'))
-        tokens = [word for word in tokens if word not in stop_words]
-        return " ".join(tokens)
-    
-    def course_match(self, user_profile):
-        """课程匹配功能"""
-        if not self.courses or self.tfidf_matrix is None:
-            return []
-        
-        # 准备用户文本
-        user_text = self.preprocess_text(
-            user_profile.get('resume', '') + 
-            " ".join(user_profile.get('skills', [])) + 
-            user_profile.get('career_goals', '')
+    if not csv_path.exists():
+        raise FileNotFoundError(
+            f"Course data CSV file not found at {csv_path}"
         )
-        
-        if not user_text:
-            return []
-        
-        # 计算相似度
-        user_vector = self.vectorizer.transform([user_text])
-        cosine_sim = cosine_similarity(user_vector, self.tfidf_matrix).flatten()
-        
-        # 生成匹配结果
-        matched_courses = []
-        for i, course in enumerate(self.courses):
-            matching_percentage = cosine_sim[i] * 100
-            matched_courses.append({
-                'course_id': course.get('course_id'),
-                'course_name': course.get('course_name'),
-                'description': course.get('description'),
-                'prerequisites': course.get('prerequisites'),
-                "industry": course.get("industry"),        # 补上
-                "keywords": course.get("keywords"),        # 补上
-                "level": course.get("level"),              # 补上
-                'matching_percentage': round(matching_percentage, 2)
-            })
-        
-        # 按匹配度排序
-        matched_courses.sort(key=lambda x: x['matching_percentage'], reverse=True)
-        return matched_courses
-         
 
-# 初始化推荐器
-recommender = CourseRecommender()
-
-# 职业关键词映射
-job_keywords_map = {
-    "AI product manager": [
-        "product management", "python", "machine learning", "deep learning",
-        "data analysis", "artificial intelligence", "user experience", "business analysis",
-        "prompt engineering", "algorithms", "app development"
-    ],
-    "data scientist": [
-        "python", "machine learning", "statistics", "data mining", "data visualization",
-        "deep learning", "SQL", "big data"
-    ]
-}
-
-def normalize_job(s):
-    """标准化职业名称"""
-    return re.sub(r'[^a-z0-9 ]', '', s.lower()).strip()
-
-def expand_profile(user_profile):
-    """扩展用户资料"""
-    goal = normalize_job(user_profile.get('career_goals', ''))
-    extra_skills = set()
-    
-    for k, kws in job_keywords_map.items():
-        k_norm = normalize_job(k)
-        if k_norm in goal or all(word in goal for word in k_norm.split()):
-            extra_skills.update(kws)
-    
-    skills = set([s.lower() for s in user_profile.get('skills', [])])
-    total_skills = list(skills | extra_skills)
-    
-    new_profile = dict(user_profile)
-    new_profile['skills'] = total_skills
-    return new_profile
-
-@app.route('/api/llm/generate', methods=['POST'])
-def generate_text():
-    """LLM文本生成端点"""
+    courses = []
     try:
-        data = request.json
-        prompt = data.get('prompt', '')
-        
-        if not prompt:
-            return jsonify({'error': 'Prompt is required'}), 400
-        
-        # 模拟LLM响应（实际使用时替换为真实LLM调用）
-        response_text = f"这是一个模拟的LLM响应。用户输入: {prompt[:100]}..."
-        
-        return jsonify({
-            'text': response_text,
-            'status': 'success'
-        })
-        
+        with open(csv_path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                courses.append(row)
+        print(f"Loaded {len(courses)} courses from {csv_path}")
+        return courses
     except Exception as e:
-        return jsonify({
-            'error': 'LLM processing failed',
-            'details': str(e)
-        }), 500
+        raise RuntimeError(f"Error loading courses from CSV: {e}")
 
-@app.route('/api/courses/match', methods=['POST'])
-def match_courses():
+
+def load_reviews() -> Tuple[Dict[str, List[Dict[str, Any]]], Dict[str, float], Dict[str, float]]:
+    """
+    Load reviews from course_review.csv and group by CourseID.
+    Returns: (Dict[course_id, list_of_reviews], Dict[course_id, avg_workload_hours], Dict[course_id, avg_rating])
+    """
+    reviews_map = {}
+    workload_hours_map = {}  # course_id -> list of hours
+    ratings_map = {}  # course_id -> list of ratings
+    
+    backend_dir = Path(__file__).resolve().parent
+    repo_root = backend_dir.parent
+    csv_path = repo_root / "course_review.csv"
+
+    if not csv_path.exists():
+        print(f"Warning: Reviews file not found at {csv_path}")
+        return {}, {}, {}
+
     try:
-        data = request.json
+        with open(csv_path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                cid = row.get("CourseID", "").strip()
+                if not cid:
+                    continue
+                
+                # Collect workload hours
+                try:
+                    hours = int(row.get("WorkloadHours", 0))
+                    if hours > 0:
+                        if cid not in workload_hours_map:
+                            workload_hours_map[cid] = []
+                        workload_hours_map[cid].append(hours)
+                except ValueError:
+                    pass
+                
+                # Collect overall ratings
+                try:
+                    overall_rating = int(row.get("OverallRating", 0))
+                    if overall_rating > 0:
+                        if cid not in ratings_map:
+                            ratings_map[cid] = []
+                        ratings_map[cid].append(overall_rating)
+                except ValueError:
+                    pass
+                
+                # Map workload rating to label
+                try:
+                    wl_rating = int(row.get("WorkloadRating", "3"))
+                    if wl_rating <= 2:
+                        wl_label = "Light"
+                    elif wl_rating == 3:
+                        wl_label = "Medium"
+                    else:
+                        wl_label = "Heavy"
+                except ValueError:
+                    wl_label = "Medium"
 
-        # 解析用户资料
-        resume = data.get('resume', '')
-        skills_str = data.get('skills', '')
-        career_goals = data.get('career_goals', '')
-        
-        # 处理技能列表
-        skills = [s.strip() for s in re.split('[,，；;、 ]', skills_str) if s.strip()]
-        
-        user_profile = {
-            'resume': resume,
-            'skills': skills,
-            'career_goals': career_goals
-        }
-        
-        # 扩展用户资料
-        expanded_profile = expand_profile(user_profile)
-        
-        # 获取匹配的课程（不生成摘要）
-        matched_courses = recommender.course_match(expanded_profile)
-        
-        # 直接返回课程数据
-        return jsonify({
-            'status': 'success',
-            'results': matched_courses[:15],  # 只返回前15个结果
-            'total_matches': len(matched_courses)
-        })
-        
+                review = {
+                    "id": row.get("RowID", ""),
+                    "author": "Student", # Anonymized
+                    "semester": row.get("Timestamp", "").split("T")[0], # Just the date
+                    "rating": int(row.get("OverallRating", 5) or 5),
+                    "text": row.get("Comment", ""),
+                    "likes": 0,
+                    "workload": wl_label,
+                    "workflow": row.get("Workflow", ""),
+                    "interest": int(row.get("InterestRating", 5) or 5),
+                    "utility": int(row.get("UtilityRating", 5) or 5)
+                }
+                
+                if cid not in reviews_map:
+                    reviews_map[cid] = []
+                reviews_map[cid].append(review)
     except Exception as e:
-        return jsonify({
-            'error': 'Course matching failed',
-            'details': str(e)
-        }), 500
+        print(f"Error loading reviews: {e}")
+        return {}, {}, {}
+    
+    # Calculate average workload hours per course
+    avg_workload_map = {}
+    for cid, hours_list in workload_hours_map.items():
+        avg_workload_map[cid] = sum(hours_list) / len(hours_list)
+    
+    # Calculate average rating per course
+    avg_rating_map = {}
+    for cid, rating_list in ratings_map.items():
+        avg_rating_map[cid] = round(sum(rating_list) / len(rating_list), 1)
+    
+    return reviews_map, avg_workload_map, avg_rating_map
+
+COURSES: List[Dict[str, Any]] = load_courses()
+REVIEWS_MAP, WORKLOAD_HOURS_MAP, RATINGS_MAP = load_reviews()
+
+# ---------------------------------------------------------------------
+# Helpers: safe text + scoring
+# ---------------------------------------------------------------------
 
 
-@app.route('/api/courses/summarize', methods=['POST'])
-def summarize_course():
-    try:
-        data = request.json
-        course = data.get('course', {})  # 接收完整课程对象
-        user_profile = data.get('user_profile', {})
-        print(course), print(user_profile)
-        # 构造提示词（修复原代码中的变量名错误）
-        prompt = f"""
-        请根据下列用户信息和课程内容，仅输出一条不超过50字的英语的推荐语，必须是英语。语言风格活泼生动，禁止任何解释说明，推荐语必须以【推荐语】开头，以【推荐语】结尾。
-        ---
-        用户职业目标：{user_profile.get("career_goals", "")}
-        相关技能：{", ".join(user_profile.get("skills", []))}
-        课程名称：{course.get("course_name", "")}
-        课程行业：{course.get("industry", "未知行业")}
-        课程关键词：{course.get("keywords", "无关键词")}
-        课程描述：{course.get("description", "")}
-        """
-        output = llm(prompt, max_tokens=100, temperature=0.9, top_p=0.95, top_k=10)
-        summary = output['choices'][0]['text'].strip()
-        import re
+def safe_text(x: Any) -> str:
+    """Convert anything to a lowercased, single-spaced string."""
+    if x is None:
+        return ""
+    s = str(x)
+    # Normalize whitespace without regex, to avoid type issues
+    return " ".join(s.strip().lower().split())
 
-        # 只提取出“【推荐语】...”内容，没有推荐语标志就只留第一句话或前80个字
-        m = re.search(r'【推荐语】(.+?)【推荐语】', summary)
-        if m:
-            summary = m.group(1).strip()
+
+def join_parts(parts: List[Any]) -> str:
+    out: List[str] = []
+    for p in parts:
+        if isinstance(p, list):
+            out.extend([safe_text(v) for v in p])
         else:
-            summary = re.split(r'\n|。', summary)[0][:80]
-        return jsonify({'status': 'success', 'summary': summary})
-    
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+            out.append(safe_text(p))
+    return " ".join(out)
 
 
-@app.route('/api/review/audit', methods=['POST'])
-def audit_review():
+def build_course_search_text(course: Dict[str, Any]) -> str:
+    """Combine likely useful fields into a single search string."""
+    # Try a range of key names to be robust to schema differences
+    key_candidates = [
+        "course_id",
+        "Course ID",
+        "id",
+        "course_name",
+        "Course Name",
+        "name",
+        "title",
+        "short_desc",
+        "short_description",
+        "description",
+        "long_desc",
+        "long_description",
+        "keywords",
+        "tags",
+        "Topics",
+        "skills",
+    ]
+    parts: List[Any] = []
+    for k in key_candidates:
+        if k in course:
+            parts.append(course[k])
+    return join_parts(parts)
+
+
+# Precompute search text for each course
+for c in COURSES:
+    c["_search_text"] = build_course_search_text(c)
+
+
+def score_course(query_text: str, course: Dict[str, Any]) -> float:
+    """Very simple token-overlap score."""
+    q_tokens = [t for t in query_text.split() if t]
+    if not q_tokens:
+        return 0.0
+
+    c_text = course.get("_search_text", "")
+    if not c_text:
+        return 0.0
+
+    score = 0.0
+    for t in q_tokens:
+        if t in c_text:
+            score += 1.0
+    return score / len(q_tokens)
+
+
+# ---------------------------------------------------------------------
+# API routes
+# ---------------------------------------------------------------------
+
+
+@app.route("/api/health", methods=["GET"])
+def health() -> Any:
+    return jsonify({"status": "ok", "courses_count": len(COURSES)})
+
+
+@app.route("/api/courses/match", methods=["POST"])
+def api_match_courses() -> Any:
+    """
+    Request body:
+    {
+      "goal": "drama",
+      "skills": ["acting"],
+      "resume": "..."
+    }
+
+    Response:
+    {
+      "courses": [ ... top matches ... ]
+    }
+    """
     try:
-        review_data = request.json
-        review_text = review_data.get("review_text", "")
-        print("收到审核请求：", review_text)
-        prompt = f"""
-        Please perform an automatic AI audit of the given course review content. Important: Only output ONE strict JSON, and NOTHING else.
-        Rules:
-        1. If it contains rude, vulgar, or foul language, fail.
-        2. If less than 15 characters, fail, reason 'Content is too brief'.
-        3. Else pass.
-        Example output: {{"Audit Status": "Pass"/"Fail", "Reason": "..."}}
-        Review text: {review_text}
-        """
-
-        output = llm(prompt, max_tokens=200, temperature=0.5, top_p=0.95, top_k=10)
-        response_text = output['choices'][0]['text'].strip()
-        print("LLM返回内容：", response_text)
-
-        # 正则找最后一个JSON片段
-        import re, json
-        try:
-            json_matches = re.findall(r'\{.*?"Audit Status".*?\}', response_text, re.DOTALL)
-            if json_matches:
-                last_json = json_matches[-1]
-                result = json.loads(last_json)
-                print("解析后result：", result)
-            else:
-                raise Exception("No valid JSON found in LLM response!")
-            if "Audit Status" not in result or "Reason" not in result:
-                raise Exception("Missing required JSON keys")
-        except Exception as ex:
-            print("AI JSON解析失败:", ex)
-            result = {"Audit Status": "Fail", "Reason": "AI failed to generate valid JSON: " + str(response_text)}
-        return jsonify(result), 200
+        payload = request.get_json(force=True, silent=False) or {}
     except Exception as e:
-        print("顶层异常：", e)
-        return jsonify({'Audit Status':"Fail", 'Reason': str(e)}), 500
+        return jsonify({"error": f"Invalid JSON body: {e}"}), 400
+
+    goal = safe_text(payload.get("goal", ""))
+    skills_raw = payload.get("skills", [])
+    if isinstance(skills_raw, list):
+        skills_text = join_parts(skills_raw)
+    else:
+        skills_text = safe_text(skills_raw)
+
+    resume = safe_text(payload.get("resume", ""))
+
+    query_text = join_parts([goal, skills_text, resume]).strip()
+    if not query_text:
+        # Avoid empty queries so every course doesn't get score 0
+        query_text = "course"
+
+    # 1. Exact ID match check
+    # We'll look for an exact match on course_id (or similar fields)
+    exact_matches = []
+    other_candidates = []
+
+    # Normalize query for ID check (remove spaces, lowercase)
+    # e.g. "15-445" -> "15445"
+    query_id_clean = query_text.replace("-", "").replace(" ", "").lower()
+
+    for c in COURSES:
+        # Calculate score as before
+        s = score_course(query_text, c)
+        
+        # Check for exact ID match
+        cid = str(c.get("course_id") or c.get("id") or c.get("number") or "").lower()
+        cid_clean = cid.replace("-", "").replace(" ", "")
+        
+        # If the query looks like an ID (digits/numbers) and matches exactly
+        if query_id_clean and query_id_clean == cid_clean:
+            # Boost score to 1.0 (or higher) to ensure it's top
+            s = 2.0 
+            exact_matches.append((s, c))
+        else:
+            other_candidates.append((s, c))
+
+    # STRICT SEARCH REQUIREMENT:
+    # If we have exact matches, return ONLY those.
+    if exact_matches:
+        top = exact_matches
+    else:
+        # Sort others by score
+        other_candidates.sort(key=lambda x: x[0], reverse=True)
+        top = other_candidates[:20]
+
+    def build_match_obj(score: float, c: Dict[str, Any]) -> Dict[str, Any]:
+        # CSV fields are already clean
+        cid = c.get("course_id", "")
+        name = c.get("course_name", "Untitled Course")
+        
+        # Rating - use average from reviews, default to 4.5 if no reviews
+        rating = RATINGS_MAP.get(str(cid), 4.5)
+
+        # Match percent (0–100)
+        match_percent = int(round(max(0.0, min(1.0, score)) * 100))
+
+        # Workload - calculate from average hours
+        avg_hours = WORKLOAD_HOURS_MAP.get(str(cid), 0)
+        if avg_hours == 0:
+            workload_label = "Unknown"
+        elif avg_hours <= 7:
+            workload_label = "Light Workload"
+        elif avg_hours <= 11:
+            workload_label = "Medium Workload"
+        else:
+            workload_label = "Heavy Workload"
+
+        # Level from CSV (grey badge)
+        level = c.get("level", "unknown")
+
+        # Tags from keywords field (purple badges)
+        tags: List[str] = []
+        keywords_str = c.get("keywords", "")
+        if keywords_str:
+            # Handle stringified lists like "['a', 'b']"
+            if keywords_str.startswith("[") and keywords_str.endswith("]"):
+                keywords_str = keywords_str[1:-1]
+            
+            # Split by comma
+            parts = keywords_str.split(",")
+            
+            for p in parts:
+                # Clean up quotes and whitespace
+                clean_p = p.strip().replace("'", "").replace('"', "")
+                if clean_p:
+                    tags.append(clean_p)
+
+        # Description from CSV
+        summary = c.get("description_clean", "No description available for this course.")
+
+        # Reviews from course_review.csv
+        reviews = REVIEWS_MAP.get(str(cid), [])
+
+        return {
+            "course_id": cid,
+            "course_name": name,
+            "rating": rating,
+            "match_percent": match_percent,
+            "workload_label": workload_label,
+            "level": level,
+            "tags": tags[:10],
+            "ai_summary": summary,
+            "reviews": reviews,
+            "industry": c.get("industry", ""),
+            # Pass through the raw course in case the frontend wants it
+            "raw": c,
+        }
+
+    courses_payload = [build_match_obj(s, c) for s, c in top]
+
+    return jsonify(
+        {
+            "courses": courses_payload,
+            "debug": {
+                "query_text": query_text,
+                "total_courses": len(COURSES),
+            },
+        }
+    )
 
 
-@app.route('/api/health', methods=['GET'])
-def health_check():
-    """健康检查"""
+@app.route("/api/courses/summarize", methods=["POST"])
+def api_summarize_course() -> Any:
+    """
+    Return the course description_clean as the summary.
+    """
+    try:
+        payload = request.get_json(force=True, silent=False) or {}
+    except Exception:
+        payload = {}
+    
+    course = payload.get("course", {})
+    
+    # Try to get the course_id from the payload
+    course_id = course.get("course_id") or course.get("id")
+    
+    # Look up the course in COURSES to get the description_clean
+    description = "No description available for this course."
+    
+    if course_id:
+        for c in COURSES:
+            cid = str(c.get("course_id") or c.get("id") or "")
+            if str(course_id) == cid:
+                description = (
+                    c.get("description_clean")
+                    or c.get("description")
+                    or c.get("Description")
+                    or "No description available for this course."
+                )
+                break
+    
     return jsonify({
-        'status': 'OK',
-        'message': 'Local LLM Proxy Server is running',
-        'courses_loaded': len(recommender.courses)
+        "summary": description
     })
 
-@app.route('/')
-def index():
-    """主页"""
-    return jsonify({
-        'service': 'Local LLM Proxy Server',
-        'version': '1.0',
-        'endpoints': [
-            '/api/llm/generate - POST - 文本生成',
-            '/api/courses/match - POST - 课程匹配',
-            '/api/courses/summarize - POST - 课程摘要',
-            '/api/health - GET - 健康检查'
-        ]
-    })
 
-if __name__ == '__main__':
-    print(f"本地LLM代理服务器启动在端口 {PORT}")
-    print(f"已加载 {len(recommender.courses)} 门课程")
-    app.run(host='0.0.0.0', port=PORT, debug=True)
+# ---------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------
+
+
+def main() -> None:
+    # Simple Flask dev server; no waitress dependency
+    app.run(host="0.0.0.0", port=3002, debug=True)
+
+
+if __name__ == "__main__":
+    main()
+

@@ -2,7 +2,8 @@
   "manifest_version": 3,
   "name": "Course Pilot",
   "version": "1.0.0",
-  "description": "An intelligent Chrome extension for CMU students to discover and review courses with AI-powered recommendations",
+  "description": "...",
+
   "action": {
     "default_title": "Course Pilot",
     "default_icon": {
@@ -11,34 +12,45 @@
       "128": "images/Icon.png"
     }
   },
+
   "icons": {
     "16": "images/Icon.png",
-    "48": "images/Icon.png", 
+    "48": "images/Icon.png",
     "128": "images/Icon.png"
   },
+
   "side_panel": {
     "default_path": "frontend/sidepanel.html"
   },
-  "permissions": [
-    "sidePanel",
-    "storage",
-    "activeTab"
-  ],
+
   "host_permissions": [
+    "http://localhost/*",
+    "http://127.0.0.1/*",
     "https://script.google.com/*",
     "https://sheets.googleapis.com/*"
   ],
+
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+
   "background": {
     "service_worker": "chrome/background.js"
   },
-  
+
   "web_accessible_resources": [
     {
-      "resources": ["courses.json", "src/external/*"],
+      "resources": [
+        "courses.json",
+        "src/external/*",
+        "frontend/assets/*",
+        "frontend/assets/assets/*",
+        "frontend/react_ui/public/*"
+      ],
       "matches": ["<all_urls>"]
     }
-  ],
-  "content_security_policy": {
-    "extension_pages": "script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;"
-  }
+  ]
 }
