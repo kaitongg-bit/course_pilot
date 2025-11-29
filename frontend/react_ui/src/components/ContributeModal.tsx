@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { useState } from 'react';
 import { UserReview } from '../App';
+import { ScottyLoader } from './ScottyLoader';
 
 interface ContributeModalProps {
   isLoggedIn: boolean;
@@ -11,28 +12,55 @@ interface ContributeModalProps {
 
 export function ContributeModal({ isLoggedIn, onClose, onSubmitReview, onRequestSignIn }: ContributeModalProps) {
   const [courseNumber, setCourseNumber] = useState('');
-  const [courseTitle, setCourseTitle] = useState('');
   const [workload, setWorkload] = useState('');
   const [workflow, setWorkflow] = useState('');
   const [interestRating, setInterestRating] = useState('');
   const [utilityRating, setUtilityRating] = useState('');
   const [overallRating, setOverallRating] = useState('');
   const [comment, setComment] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [auditError, setAuditError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!isLoggedIn) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setAuditError('');
+
+    // Audit the review comment for profanity
+    try {
+      const auditResponse = await fetch('http://localhost:3002/api/review/audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ review_text: comment })
+      });
+
+      const auditResult = await auditResponse.json();
+
+      if (auditResult['Audit Status'] === 'Fail') {
+        setAuditError(auditResult.Reason || 'Review contains inappropriate content');
+        setIsSubmitting(false);
+        return;
+      }
+    } catch (error) {
+      console.error('Audit failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setAuditError(`Failed to validate review: ${errorMessage}. Make sure backend is running on port 3002.`);
+      setIsSubmitting(false);
       return;
     }
 
     const currentDate = new Date();
     const semester = `${currentDate.getMonth() < 6 ? 'Spring' : 'Fall'} ${currentDate.getFullYear()}`;
-    
+
     const newReview: UserReview = {
       id: Date.now().toString(),
       courseNumber,
-      courseTitle,
+      courseTitle: '', // Auto-filled from course number
       semester,
       rating: parseInt(overallRating),
       comment,
@@ -44,6 +72,7 @@ export function ContributeModal({ isLoggedIn, onClose, onSubmitReview, onRequest
     };
 
     onSubmitReview(newReview);
+    setIsSubmitting(false);
     onClose();
   };
 
@@ -62,7 +91,7 @@ export function ContributeModal({ isLoggedIn, onClose, onSubmitReview, onRequest
                 Please sign in to submit a course review.
               </p>
             </div>
-            <button 
+            <button
               onClick={onClose}
               className="text-[#6B7280] hover:text-[#2E2E2E] p-1 rounded-lg hover:bg-[#F5F5F5] transition-colors"
             >
@@ -112,10 +141,10 @@ export function ContributeModal({ isLoggedIn, onClose, onSubmitReview, onRequest
               Please fill out the form below to contribute your course review.
             </p>
             <p className="text-xs text-[#2E2E2E] mt-1">
-              Only <span className="font-medium">Course Number, Course Title, Overall Rating, Comment</span> are mandatory, others optional.
+              Only <span className="font-medium">Course Number, Overall Rating, Comment</span> are mandatory, others optional.
             </p>
           </div>
-          <button 
+          <button
             onClick={onClose}
             className="text-[#6B7280] hover:text-[#2E2E2E] p-1 rounded-lg hover:bg-[#F5F5F5] transition-colors"
           >
@@ -134,20 +163,6 @@ export function ContributeModal({ isLoggedIn, onClose, onSubmitReview, onRequest
               value={courseNumber}
               onChange={(e) => setCourseNumber(e.target.value)}
               placeholder="e.g., 15-445"
-              required
-              className="w-full px-4 py-2 bg-[#F5F5F5] rounded-xl border border-[#E5E7EB] focus:outline-none focus:ring-2 focus:ring-[#CC0033] text-[#2E2E2E]"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm text-[#2E2E2E] mb-2">
-              Course Title<span className="text-[#CC0033]">*</span>
-            </label>
-            <input
-              type="text"
-              value={courseTitle}
-              onChange={(e) => setCourseTitle(e.target.value)}
-              placeholder="e.g., Database Systems"
               required
               className="w-full px-4 py-2 bg-[#F5F5F5] rounded-xl border border-[#E5E7EB] focus:outline-none focus:ring-2 focus:ring-[#CC0033] text-[#2E2E2E]"
             />
@@ -239,11 +254,25 @@ export function ContributeModal({ isLoggedIn, onClose, onSubmitReview, onRequest
             />
           </div>
 
-          <button 
+          {auditError && (
+            <div className="bg-[#FEE2E2] border border-[#FCA5A5] rounded-xl p-3">
+              <p className="text-sm text-[#CC0033]">{auditError}</p>
+            </div>
+          )}
+
+          <button
             type="submit"
-            className="w-full bg-[#CC0033] hover:bg-[#A60000] text-white py-3 rounded-xl transition-colors"
+            disabled={isSubmitting}
+            className="w-full bg-[#CC0033] hover:bg-[#A60000] text-white py-3 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            Submit Review
+            {isSubmitting ? (
+              <>
+                <ScottyLoader />
+                <span>Validating...</span>
+              </>
+            ) : (
+              'Submit Review'
+            )}
           </button>
         </form>
       </div>

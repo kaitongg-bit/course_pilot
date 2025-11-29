@@ -1,47 +1,31 @@
 #!/bin/bash
 
-# 本地LLM环境安装脚本
-# 适用于Ubuntu/WSL环境
+echo "🚀 Installing local LLM dependencies..."
 
-# 切换到你的项目根目录 (仅用 Linux 路径！)
-cd ~/course_pilot || exit 1
-echo "当前目录: $(pwd)"
+# ALWAYS cd into the directory where the script is located
+cd "$(dirname "$0")" || exit 1
 
-echo "📦 开始安装本地LLM环境..."
-
-# 检查模型文件
-MODEL_PATH="models/Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
-if [ ! -f "$MODEL_PATH" ]; then
-    echo "⚠️  警告：模型文件不存在，请手动下载模型文件"
-else
-    echo "✅ 检测到模型文件: $MODEL_PATH"
+# Ensure virtual environment exists
+if [ ! -d "venv" ]; then
+    echo "⚙️ Creating virtual environment..."
+    python3 -m venv venv
 fi
 
-# 检查Python版本
-python3 --version
-echo "✅ Python环境检查完成"
+# Activate venv
+echo "📦 Activating environment..."
+source venv/bin/activate
 
-# 安装依赖（只需要一次 cd，不要切换路径了！）
-pip3 install --upgrade pip setuptools wheel
-pip3 install -r backend/requirements.txt
+# Upgrade pip
+pip install --upgrade pip
 
-# 检查llama-cpp-python
-if ! python3 -c "import llama_cpp" 2>/dev/null; then
-    echo "🔧 安装llama-cpp-python..."
-    pip3 install llama-cpp-python
-fi
+# Install llama-cpp-python for Intel Mac (your computer)
+echo "📥 Installing llama-cpp-python..."
+pip install "llama-cpp-python==0.2.32" --no-cache-dir
 
-echo "✅ 安装完成！"
-echo ""
-echo "🚀 启动本地LLM服务器："
-echo "source venv/bin/activate"
-echo "python3 backend/llm-proxy.py"
-echo ""
-echo "🌐 前端服务（新终端）："
-echo "cd ~/course_pilot"
-echo "npm run dev"
+# Install other dependencies
+echo "📥 Installing Python dependencies..."
+pip install numpy flask flask-cors scikit-learn nltk
 
-echo "📖 使用说明："
-echo "1. 先启动本地LLM服务器（端口5001）"
-echo "2. 再启动前端服务"
-echo "3. 访问 http://localhost:3000 使用课程推荐系统"
+echo "🎉 Installation complete!"
+echo "Run 'bash start_llm_server.sh' to start the backend."
+

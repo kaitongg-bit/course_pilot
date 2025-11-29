@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { ScottyLoader } from "./ScottyLoader";
 import { CourseCard } from "./CourseCard";
+import { TimeSelector, DaySchedule } from "./TimeSelector";
 
 type CourseMatch = {
   id?: string;
@@ -24,6 +25,7 @@ export function ChatTab({ onViewCourse }: ChatTabProps) {
   const [goal, setGoal] = useState("");
   const [skills, setSkills] = useState("");
   const [resume, setResume] = useState("");
+  const [selectedSchedule, setSelectedSchedule] = useState<DaySchedule[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +44,7 @@ export function ChatTab({ onViewCourse }: ChatTabProps) {
           .map((s) => s.trim())
           .filter(Boolean),
         resume: resume.trim() || null,
+        schedule: selectedSchedule,
       };
 
       console.log("[ChatTab] sending payload:", payload);
@@ -170,6 +173,17 @@ export function ChatTab({ onViewCourse }: ChatTabProps) {
               />
             </div>
 
+            {/* Time Selector */}
+            <div>
+              <label className="block text-sm text-[#2E2E2E] mb-2.5">
+                Available Times
+              </label>
+              <TimeSelector
+                selectedSchedule={selectedSchedule}
+                onChange={setSelectedSchedule}
+              />
+            </div>
+
             {/* Button */}
             <div className="pt-2 pb-4">
               <button
@@ -188,7 +202,8 @@ export function ChatTab({ onViewCourse }: ChatTabProps) {
                     <span className="text-lg">🎯</span>
                     <span className="text-sm font-medium">Find Courses</span>
                   </>
-                )}
+                )
+                }
               </button>
             </div>
           </div>

@@ -1,6 +1,6 @@
 /* global chrome */
 import { useState } from 'react';
-import { Star, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react';
+import { Star, TrendingUp, ChevronDown, ChevronUp, Calendar } from 'lucide-react';
 import { ScottyLoader } from './ScottyLoader';
 
 interface CourseCardProps {
@@ -113,6 +113,14 @@ export function CourseCard({ course, onViewMore }: CourseCardProps) {
           </span>
         ))}
       </div>
+
+      {/* Meeting Time */}
+      {course.meetingTime && course.meetingTime !== "TBA" && (
+        <div className="mb-3 flex items-center gap-2 bg-[#FEF2F2] border border-[#FEE2E2] rounded-xl px-3 py-2">
+          <Calendar className="w-4 h-4 text-[#CC0033]" />
+          <span className="text-sm text-[#2E2E2E]">{course.meetingTime}</span>
+        </div>
+      )}
 
       <div className="flex items-center gap-4 mb-3">
         <div className="flex items-center gap-1">

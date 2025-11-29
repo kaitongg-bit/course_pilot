@@ -1,160 +1,114 @@
+# Course Pilot - AI Course Planner
 
-# Local LLM Course Recommendation System (AI Course Pilot) — Complete Beginner Guide
+Course Pilot is a Chrome extension that helps students plan their courses using an AI-powered assistant. It integrates with a local LLM to provide course recommendations, scheduling assistance, and review analysis.
 
-***
+## Prerequisites
 
-## 0. Environment Requirements & OS Recommendations
+Before you begin, ensure you have the following installed on your system:
 
-- **Strongly recommended: Use Ubuntu (including WSL) or Mac OS to develop/run this project.**
-- **Do NOT run this project directly in a native Windows environment! Avoid using Windows commands.**
-- If you must use Windows, please install WSL from the Microsoft Store, set up an Ubuntu subsystem, and perform all operations in the Ubuntu terminal.
+-   **Git**: [Download Git](https://git-scm.com/downloads)
+-   **Python 3.10+**: [Download Python](https://www.python.org/downloads/)
+-   **Node.js & npm** (for building the frontend): [Download Node.js](https://nodejs.org/)
 
-***
+---
 
-## 1. Recommended Editors & AI Assistants
+## Installation & Setup
 
-- It is highly recommended to use AI-supported editors or tools (such as CodeBuddy, Cursor, VSCode with AI plugins, Perplexity, Claude, etc.) for more efficient development and troubleshooting.
-- For AI code suggestions, always use “chat mode” or “small snippet completion” — do NOT perform bulk auto-rewrites of files.
-- If you encounter errors with your environment or commands, promptly Google for solutions.
+### 1. Clone the Repository
 
-***
-
-## 2. Project Cloning (Private Repo Token Setup)
-
-- Repo address: https://github.com/kaitongg-bit/course_pilot.git
-- **This is a private repository; you need a GitHub account and a Personal Access Token to clone it, as follows:**
-
-1. In the terminal, enter the command:
-
-```
-git clone https://github.com/kaitongg-bit/course_pilot.git
+```bash
+git clone -b enhanced-ui-csv-data https://github.com/kaitongg-bit/course_pilot.git
+cd course_pilot
 ```
 
-2. If prompted for username and password:
-    - Username: your GitHub account name
-    - Password: your [GitHub Personal Access Token]
-3. Token generation process:
-    - Go to your GitHub homepage (top-right avatar) → Settings → Developer settings → Personal access tokens → Generate new token
-    - Select permissions for "repo", create the token, and copy/save it (it will only be shown once!)
-    - For a step-by-step guide, Google “How to clone a private GitHub repo with a personal access token”
+### 2. Backend Setup (Local LLM Server)
 
-***
+The backend runs a local Flask server that interfaces with a quantized LLM (Qwen2.5-3B).
 
-## 3. Node.js Dependency Installation (Install Early)
+#### **Mac / Linux**
 
-- If your frontend uses build tools (e.g., tailwind, js tools), install node_modules dependencies first in your frontend directory.
-- In your frontend directory, open a terminal and run:
+1.  **Run the setup script:**
+    This script will create a virtual environment, install dependencies, and download the necessary LLM model.
+    ```bash
+    chmod +x install_local_llm.sh
+    ./install_local_llm.sh
+    ```
 
-```
-npm install
-```
+2.  **Start the Backend Server:**
+    ```bash
+    chmod +x start_llm_server.sh
+    ./start_llm_server.sh
+    ```
+    The server will start on `http://127.0.0.1:3002`.
 
-This will automatically pull all frontend dependencies and create the node_modules folder. **Do NOT manually download or edit the node_modules folder.**
+#### **Windows**
 
-***
+1.  **Create a virtual environment:**
+    ```powershell
+    python -m venv venv
+    .\venv\Scripts\activate
+    ```
 
-## 4. Backend Environment & Dependency Setup (Always Activate Virtualenv!)
+2.  **Install dependencies:**
+    ```powershell
+    pip install -r requirements.txt
+    ```
 
-1. **Create and activate a Python virtual environment (Always activate in every new terminal!):**
+3.  **Download the Model:**
+    Download `qwen2.5-3b-instruct-q4_k_m.gguf` and place it in a `models/` directory in the root of the project.
+    *Note: The `install_local_llm.sh` script automates this on Unix systems. You may need to manually download it from HuggingFace.*
 
-```
-python3 -m venv venv
-source venv/bin/activate
-```
+4.  **Start the Backend Server:**
+    ```powershell
+    python backend/llm-proxy.py
+    ```
 
-Once activated, your prompt will show a (venv) prefix.
+---
 
-2. **Install dependencies (in the project root directory’s terminal):**
+### 3. Frontend Setup (React Extension)
 
-```
-pip install -r requirements.txt
-```
+The frontend is built with React and Vite.
 
-If you see pip or dependency errors, try several times and Google the error info for solutions.
+1.  **Navigate to the frontend directory:**
+    ```bash
+    cd frontend/react_ui
+    ```
 
-***
+2.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
 
-## 5. LLM Model File Download/Configuration
+3.  **Build the project:**
+    ```bash
+    npm run build
+    ```
+    This will generate the production assets in `frontend/react_ui/build`.
 
-1. **Run the model download script in the terminal (project root):**
+---
 
-```
-python download.py
-```
+## Loading the Chrome Extension
 
-2. If it stalls or fails, Google the model file for manual download and place it in the models/ folder.
+1.  Open Google Chrome and navigate to `chrome://extensions/`.
+2.  Enable **Developer mode** in the top right corner.
+3.  Click **Load unpacked**.
+4.  Select the `frontend` folder inside the `course_pilot` directory (ensure you select the folder containing `manifest.json`).
+5.  The **Course Pilot** extension should now appear in your browser.
 
-***
+---
 
-## 6. Starting the Backend Service  
-(“Run directly in the terminal.” If using Ubuntu, make sure you are **really** running in Ubuntu, not a PowerShell window; if unsure about setting up Ubuntu/WSL, please consult AI tools, as you’ll need to set username/password the first time.)
+## Usage
 
-- Always activate the virtual environment with source venv/bin/activate *before* starting! Remind teammates not to skip this step!
-- In the project’s root directory, run in terminal:
+1.  Ensure the **Backend Server** is running (`./start_llm_server.sh`).
+2.  Click the **Course Pilot** icon in your Chrome toolbar.
+3.  Open the side panel to access the AI Course Planner.
+4.  **Features:**
+    -   **Chat:** Ask for course recommendations based on your goals and skills.
+    -   **Time Selector:** Filter courses by your available schedule.
+    -   **Reviews:** View and contribute course reviews (validated by AI).
 
-```
-chmod +x start_llm_server.sh
-./start_llm_server.sh
-```
+## Troubleshooting
 
-- If you see “Starting server on port ...”, you’re good! For port/path errors, Google the terminal message for solutions.
-
-
-***
-
-## 7. Frontend Launch & Development
-
-- Main frontend files: sidepanel.html (UI design), sidepanel.js (interaction logic), tailwind.css (styles).
-- For development as a Chrome extension: Chrome → Extensions → Developer Mode → Load Unpacked Extension → select your frontend directory, e.g. \wsl.localhost\Ubuntu-24.04\home\kita\course_pilot.
-- Main modifications for UI and features are in sidepanel.js and sidepanel.html.
-
-***
-
-## 8. Project Structure & Useless Files
-
-- You may see folders like agents, test, script — these are experimental or legacy and not needed for general development.
-- Do not delete backend, frontend, or models — if in doubt, check with a maintainer before deleting anything else.
-
-***
-
-## 9. Team Collaboration & Branch Workflow
-
-- Always develop new features or fixes in a new git branch:
-
-```
-git checkout -b feat-your-branch-name
-```
-
-- When committing, always use clear messages (in English or Chinese, but be specific) — never “update” with no notes:
-
-```
-git add .
-git commit -m "Refined recommendation logic; fixed path compatibility"
-git push origin feat-your-branch-name
-```
-
-- Merging to the main branch requires a pull request and team review.
-- If a bulk AI code edit goes wrong, use git log/git checkout/git reflog to recover previous versions immediately.
-
-***
-
-## 10. Common Issues & Solutions
-
-- **Dependency install failure:** Always use pip in the terminal, activate virtualenv, and Google the exact error message for similar solutions.
-- **Model download is slow or stuck:** Google the relevant model and manually add it to the models/ folder.
-- **Port conflicts:** Adjust the port in llm-proxy.py and match it on the frontend; always Google for conflict errors.
-- **Frontend extension load fails:** Google “Chrome extension development” and check for manifest permissions and Developer Mode.
-- **Windows compatibility issues:** Always use Ubuntu or Mac; no Windows commands are needed.
-
-***
-
-## 11. Terminal & Git Newbie Essentials
-
-- cd folder-name: go into the directory  
-- ls/dir: show files in current folder  
-- pwd: print working directory  
-- Ctrl+C: terminate the running program  
-- git branch/status/checkout/log: version control and code recovery  
-- For any unknown command or error, ALWAYS try asking AI
-
-***
+-   **Backend not starting?** Ensure port `3002` is free.
+-   **Extension not loading?** Make sure you selected the correct folder (`frontend`) and that the build was successful.
+-   **LLM errors?** Verify that the `.gguf` model file exists in the `models/` directory.

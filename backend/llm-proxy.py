@@ -12,12 +12,58 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from flask import Flask, jsonify, request
+from flask_cors import CORS
+from llama_cpp import Llama
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
+
+# ---------------------------------------------------------------------
+# LLM Initialization
+# ---------------------------------------------------------------------
+
+def init_llm():
+    """Initialize the LLM model for course summarization and review auditing."""
+    import os
+    import traceback
+    
+    # Disable Metal backend to avoid GPU issues - force CPU only
+    os.environ['GGML_METAL_PATH_RESOURCES'] = ''
+    os.environ['GGML_USE_METAL'] = '0'
+    
+    backend_dir = Path(__file__).resolve().parent
+    repo_root = backend_dir.parent
+    model_path = repo_root / "models" / "qwen2.5-3b-instruct-q4_k_m.gguf"
+    
+    if not model_path.exists():
+        print(f"Warning: LLM model not found at {model_path}")
+        return None
+    
+    try:
+        # CPU-only configuration
+        llm = Llama(
+            model_path=str(model_path),
+            n_ctx=2048,
+            n_threads=4,
+            n_batch=512,
+            n_gpu_layers=0,  # Force CPU only
+            use_mmap=True,
+            use_mlock=False,
+            verbose=False  # Disable verbose output
+        )
+        print(f"✓ LLM model loaded successfully (CPU mode) from {model_path}")
+        return llm
+    except Exception as e:
+        print(f"✗ Error loading LLM model: {e}")
+        traceback.print_exc()
+        return None
+
+LLM_MODEL = init_llm()
 
 # ---------------------------------------------------------------------
 # Loading course data
@@ -27,12 +73,96 @@ app = Flask(__name__)
 
 
 
+def parse_time_slots(start_str: str, end_str: str) -> List[str]:
+    """
+    Convert start/end times (e.g. '9:00 AM', '9:50 AM') into 30-min slots.
+    Slots: 8:00 AM, 8:30 AM, ..., 7:00 PM
+    """
+    if not start_str or not end_str:
+        return []
+
+    # Standardize format
+    start_str = start_str.strip().upper()
+    end_str = end_str.strip().upper()
+
+    # Helper to convert "9:00 AM" -> minutes from midnight
+    def to_mins(t_str):
+        try:
+            parts = t_str.replace(".", "").split()
+            if len(parts) != 2: return -1
+            time_part, period = parts
+            h, m = map(int, time_part.split(":"))
+            if period == "PM" and h != 12: h += 12
+            if period == "AM" and h == 12: h = 0
+            return h * 60 + m
+        except:
+            return -1
+
+    start_mins = to_mins(start_str)
+    end_mins = to_mins(end_str)
+
+    if start_mins == -1 or end_mins == -1:
+        return []
+
+    # Generate 30-min slots
+    # We'll use the same strings as the frontend TimeSelector
+    # 8:00 AM to 7:00 PM
+    
+    slots = []
+    current_mins = start_mins
+    
+    # Round down start to nearest 30
+    # Actually, for matching, if a class starts at 9:00, it occupies the 9:00 slot.
+    # If it goes to 9:50, it occupies 9:00 and 9:30.
+    # We'll iterate in 30 min increments.
+    
+    # Align to 30 min grid
+    remainder = current_mins % 30
+    if remainder != 0:
+        current_mins -= remainder # Round down to capture the slot? 
+        # Or should we be strict? Let's say if it overlaps significantly.
+        # For simplicity, let's just take the start time's 30-min block.
+    
+    while current_mins < end_mins:
+        # Convert back to string
+        h = current_mins // 60
+        m = current_mins % 60
+        period = "AM"
+        if h >= 12:
+            period = "PM"
+            if h > 12: h -= 12
+        if h == 0: h = 12
+        
+        time_str = f"{h}:{m:02d} {period}"
+        slots.append(time_str)
+        current_mins += 30
+        
+    return slots
+
+def parse_days(weekday_str: str) -> List[str]:
+    """Convert 'MWF' -> ['M', 'W', 'F'], 'TR' -> ['T', 'R']"""
+    if not weekday_str or weekday_str == "TBA":
+        return []
+    
+    # Simple char iteration works for MWF, TR
+    # But check for special cases if any
+    days = []
+    valid_chars = set(['M', 'T', 'W', 'R', 'F', 'S', 'U'])
+    for char in weekday_str.upper():
+        if char in valid_chars:
+            days.append(char)
+    return days
+
 def load_courses() -> List[Dict[str, Any]]:
-    """Load courses from cmu_labeled_llm_final.csv"""
+    """Load courses from courses_full _dataset - combined_courses.csv"""
     backend_dir = Path(__file__).resolve().parent
     repo_root = backend_dir.parent
 
-    csv_path = repo_root / "cmu_labeled_llm_final.csv"
+    csv_path = repo_root / "courses_full_dataset_combined_courses.csv"
+    
+    if not csv_path.exists():
+        # Fallback to old name if new one doesn't exist (during dev)
+        csv_path = repo_root / "cmu_labeled_llm_final.csv"
     
     if not csv_path.exists():
         raise FileNotFoundError(
@@ -44,6 +174,20 @@ def load_courses() -> List[Dict[str, Any]]:
         with open(csv_path, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
+                # Parse schedule info
+                weekday = row.get("weekday", "")
+                start = row.get("start", "")
+                end = row.get("end", "")
+                
+                row["_days"] = parse_days(weekday)
+                row["_times"] = parse_time_slots(start, end)
+                
+                # Construct meeting time string for display
+                if weekday and start and end:
+                    row["_meetingTime"] = f"{weekday} {start}-{end}"
+                else:
+                    row["_meetingTime"] = "TBA"
+                
                 courses.append(row)
         print(f"Loaded {len(courses)} courses from {csv_path}")
         return courses
@@ -234,7 +378,11 @@ def api_match_courses() -> Any:
     {
       "goal": "drama",
       "skills": ["acting"],
-      "resume": "..."
+      "resume": "...",
+      "schedule": [
+        {"day": "M", "times": ["9:00 AM", "9:30 AM"]},
+        ...
+      ]
     }
 
     Response:
@@ -255,6 +403,16 @@ def api_match_courses() -> Any:
         skills_text = safe_text(skills_raw)
 
     resume = safe_text(payload.get("resume", ""))
+    
+    # Schedule filtering
+    schedule = payload.get("schedule", [])
+    # Convert schedule to a more usable format: map of day -> set of times
+    user_schedule_map = {}
+    for item in schedule:
+        day = item.get("day")
+        times = item.get("times", [])
+        if day and times:
+            user_schedule_map[day] = set(times)
 
     query_text = join_parts([goal, skills_text, resume]).strip()
     if not query_text:
@@ -271,6 +429,41 @@ def api_match_courses() -> Any:
     query_id_clean = query_text.replace("-", "").replace(" ", "").lower()
 
     for c in COURSES:
+        # --- Time Filtering Check ---
+        if user_schedule_map:
+            # If user provided a schedule, filter out courses that don't fit
+            # Logic: The course must fit WITHIN the user's available slots.
+            # i.e. For every day the course meets, the user must have that day available,
+            # AND for every time slot the course occupies, the user must have that slot available.
+            
+            course_days = c.get("_days", [])
+            course_times = c.get("_times", [])
+            
+            if not course_days or not course_times:
+                # If course has no schedule info (TBA), do we show it?
+                # Let's assume NO if the user is filtering by time.
+                # Or maybe YES? Let's be strict for now.
+                continue
+                
+            is_compatible = True
+            for day in course_days:
+                if day not in user_schedule_map:
+                    is_compatible = False
+                    break
+                
+                # Check if all course times are in user's available times for this day
+                user_times = user_schedule_map[day]
+                for t in course_times:
+                    if t not in user_times:
+                        is_compatible = False
+                        break
+                if not is_compatible:
+                    break
+            
+            if not is_compatible:
+                continue
+        # -----------------------------
+
         # Calculate score as before
         s = score_course(query_text, c)
         
@@ -354,6 +547,9 @@ def api_match_courses() -> Any:
             "ai_summary": summary,
             "reviews": reviews,
             "industry": c.get("industry", ""),
+            "meetingTime": c.get("_meetingTime", ""),
+            "days": c.get("_days", []),
+            "times": c.get("_times", []),
             # Pass through the raw course in case the frontend wants it
             "raw": c,
         }
@@ -372,38 +568,151 @@ def api_match_courses() -> Any:
 
 
 @app.route("/api/courses/summarize", methods=["POST"])
-def api_summarize_course() -> Any:
+def summarize_course() -> Any:
     """
-    Return the course description_clean as the summary.
+    Generate an LLM-based personalized course summary.
     """
     try:
-        payload = request.get_json(force=True, silent=False) or {}
-    except Exception:
-        payload = {}
+        data = request.json
+        course = data.get('course', {})
+        user_profile = data.get('user_profile', {})
+        print(course), print(user_profile)
+        
+        # If LLM is not available, fall back to description
+        if LLM_MODEL is None:
+            course_id = course.get("course_id") or course.get("id")
+            description = "No description available for this course."
+            if course_id:
+                for c in COURSES:
+                    cid = str(c.get("course_id") or c.get("id") or "")
+                    if str(course_id) == cid:
+                        description = (
+                            c.get("description_clean")
+                            or c.get("description")
+                            or c.get("Description")
+                            or "No description available for this course."
+                        )
+                        break
+            return jsonify({'status': 'success', 'summary': description})
+        
+        # Construct prompt for LLM - Generate English description
+        prompt = f"""
+        Based on the user profile and course information below, generate a brief, engaging course recommendation in English (maximum 50 words). 
+        Use a lively, enthusiastic tone. Output ONLY the recommendation text, no explanations or labels.
+        
+        User Career Goals: {user_profile.get("career_goals", "Not specified")}
+        User Skills: {", ".join(user_profile.get("skills", [])) if user_profile.get("skills") else "Not specified"}
+        Course Name: {course.get("course_name", "")}
+        Course Industry: {course.get("industry", "General")}
+        Course Keywords: {course.get("keywords", "")}
+        Course Description: {course.get("description", "")}
+        
+        Generate a personalized recommendation in English:
+        """
+        
+        output = LLM_MODEL(prompt, max_tokens=100, temperature=0.9, top_p=0.95, top_k=10)
+        summary = output['choices'][0]['text'].strip()
+        
+        # Clean up the response - take first sentence or first 80 chars
+        if '\n' in summary:
+            summary = summary.split('\n')[0]
+        summary = summary[:150].strip()
+        
+        return jsonify({'status': 'success', 'summary': summary})
     
-    course = payload.get("course", {})
-    
-    # Try to get the course_id from the payload
-    course_id = course.get("course_id") or course.get("id")
-    
-    # Look up the course in COURSES to get the description_clean
-    description = "No description available for this course."
-    
-    if course_id:
-        for c in COURSES:
-            cid = str(c.get("course_id") or c.get("id") or "")
-            if str(course_id) == cid:
-                description = (
-                    c.get("description_clean")
-                    or c.get("description")
-                    or c.get("Description")
-                    or "No description available for this course."
-                )
-                break
-    
-    return jsonify({
-        "summary": description
-    })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/review/audit', methods=['POST'])
+def audit_review() -> Any:
+    """
+    Audit user-submitted course reviews using LLM.
+    """
+    try:
+        review_data = request.json
+        review_text = review_data.get("review_text", "")
+        print("收到审核请求:", review_text)
+        
+        # 1. Deterministic Length Check
+        if len(review_text) < 15:
+            return jsonify({"Audit Status": "Fail", "Reason": "Review is less than 15 characters long."}), 200
+
+        # 2. Python-based Safety Overrides (LLM is too unstable)
+        text_lower = review_text.lower()
+        
+        # Whitelist: Strong positive OR neutral sentiment + No bad words = PASS
+        positive_words = ["awesome", "loved", "great", "best", "amazing", "excellent", "good", "helpful", "enjoyed", "cool"]
+        neutral_words = ["alright", "ok", "okay", "fine", "average", "decent", "fair", "middle", "mediocre", "passable"]
+        
+        severe_bad_words = ["fuck", "shit", "bitch", "asshole", "idiot", "stupid", "jerk", "hate", "terrible", "horrible"]
+        
+        has_positive = any(w in text_lower for w in positive_words)
+        has_neutral = any(w in text_lower for w in neutral_words)
+        has_bad = any(w in text_lower for w in severe_bad_words)
+        
+        if (has_positive or has_neutral) and not has_bad:
+            print("Override: Detected positive/neutral sentiment with no bad words. Auto-PASS.")
+            return jsonify({"Audit Status": "Pass", "Reason": "Safe content (Auto-validated)"}), 200
+
+        # If LLM is not available, use basic validation
+        if LLM_MODEL is None:
+            return jsonify({"Audit Status": "Pass", "Reason": "Basic validation passed"}), 200
+        
+        prompt = f"""
+        You are a content moderator. Your ONLY job is to block profanity, hate speech, and personal attacks.
+        You must PASS all other reviews, whether they are positive, negative, or neutral.
+
+        Examples:
+        Input: "The professor is a jerk."
+        Output: {{"Audit Status": "Fail", "Reason": "Personal attack"}}
+
+        Input: "I loved this class, learned a lot."
+        Output: {{"Audit Status": "Pass", "Reason": "Positive review"}}
+
+        Input: "This class was very hard and time intensive."
+        Output: {{"Audit Status": "Pass", "Reason": "Valid criticism"}}
+        
+        Input: "I hated this class it was boring."
+        Output: {{"Audit Status": "Pass", "Reason": "Valid criticism"}}
+
+        Input: "{review_text}"
+        Output:
+        """
+
+        output = LLM_MODEL(prompt, max_tokens=200, temperature=0.0, top_p=0.95, top_k=10, stop=["Input:", "\n\n"])
+        response_text = output['choices'][0]['text'].strip()
+        print("LLM返回内容:", response_text, flush=True)
+
+        # Extract JSON from response
+        try:
+            json_matches = re.findall(r'\{.*?"Audit Status".*?\}', response_text, re.DOTALL)
+            if json_matches:
+                # Take the FIRST match, not the last, to avoid hallucinated examples at the end
+                first_json = json_matches[0]
+                result = json.loads(first_json)
+                
+                # HEURISTIC OVERRIDE: Fix common model hallucinations
+                # If the model says "Positive review" or "Valid criticism" but marks it as Fail, flip it to Pass.
+                reason_lower = result.get("Reason", "").lower()
+                if result.get("Audit Status") == "Fail":
+                    if "positive" in reason_lower or "valid" in reason_lower or "safe" in reason_lower:
+                        print(f"Overriding false positive: {result}")
+                        result["Audit Status"] = "Pass"
+                
+                print("解析后result:", result)
+            else:
+                raise Exception("No valid JSON found in LLM response!")
+            if "Audit Status" not in result or "Reason" not in result:
+                raise Exception("Missing required JSON keys")
+        except Exception as ex:
+            print("AI JSON解析失败:", ex)
+            result = {"Audit Status": "Fail", "Reason": "AI failed to generate valid JSON: " + str(response_text)}
+        
+        return jsonify(result), 200
+    except Exception as e:
+        print("顶层异常:", e)
+        return jsonify({'Audit Status': "Fail", 'Reason': str(e)}), 500
 
 
 # ---------------------------------------------------------------------
@@ -413,7 +722,7 @@ def api_summarize_course() -> Any:
 
 def main() -> None:
     # Simple Flask dev server; no waitress dependency
-    app.run(host="0.0.0.0", port=3002, debug=True)
+    app.run(host="0.0.0.0", port=3002, debug=False)
 
 
 if __name__ == "__main__":
