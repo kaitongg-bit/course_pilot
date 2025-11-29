@@ -59,8 +59,9 @@ The backend runs a local Flask server that interfaces with a quantized LLM (Qwen
     *Note: The `install_local_llm.sh` script automates this on Unix systems. You may need to manually download it from HuggingFace.*
 
 4.  **Start the Backend Server:**
+    You can simply double-click `start_llm_server.bat` or run:
     ```powershell
-    python backend/llm-proxy.py
+    .\start_llm_server.bat
     ```
 
 ---
