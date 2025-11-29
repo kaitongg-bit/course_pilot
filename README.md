@@ -2,6 +2,12 @@
 
 Course Pilot is a Chrome extension that helps students plan their courses using an AI-powered assistant. It integrates with a local LLM to provide course recommendations, scheduling assistance, and review analysis.
 
+## Demo
+
+<video src="demo.MOV" controls="controls" style="max-width: 100%; height: auto;">
+  Your browser does not support the video tag.
+</video>
+
 ## Prerequisites
 
 Before you begin, ensure you have the following installed on your system:
