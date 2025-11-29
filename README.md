@@ -112,3 +112,22 @@ The frontend is built with React and Vite.
 -   **Backend not starting?** Ensure port `3002` is free.
 -   **Extension not loading?** Make sure you selected the correct folder (`frontend`) and that the build was successful.
 -   **LLM errors?** Verify that the `.gguf` model file exists in the `models/` directory.
+
+## Updating to the Latest Version
+
+If you already have the repository cloned and want to get the latest changes:
+
+1.  **Stash any local changes** (if you have modified files):
+    ```bash
+    git stash
+    ```
+2.  **Pull the latest updates:**
+    ```bash
+    git pull origin enhanced-ui-csv-data
+    ```
+3.  **Rebuild the frontend** (if there were UI changes):
+    ```bash
+    cd frontend/react_ui
+    npm install
+    npm run build
+    ```
