@@ -188,6 +188,25 @@ def load_courses() -> List[Dict[str, Any]]:
                 else:
                     row["_meetingTime"] = "TBA"
                 
+                # Parse industry and skills for tags
+                industry = row.get("industry", "").strip()
+                skills_str = row.get("skills", "")
+                
+                # Clean up stringified list format if present: "['a', 'b']" -> "a, b"
+                skills_str = skills_str.replace("[", "").replace("]", "").replace("'", "").replace('"', "")
+                
+                skills_list = [s.strip() for s in skills_str.split(",") if s.strip()]
+                
+                # Update row with parsed lists
+                row["skills"] = skills_list
+                
+                # Create tags list: Industry first, then skills
+                tags = []
+                if industry:
+                    tags.append(industry)
+                tags.extend(skills_list)
+                row["tags"] = tags
+
                 courses.append(row)
         print(f"Loaded {len(courses)} courses from {csv_path}")
         return courses
@@ -513,22 +532,8 @@ def api_match_courses() -> Any:
         # Level from CSV (grey badge)
         level = c.get("level", "unknown")
 
-        # Tags from keywords field (purple badges)
-        tags: List[str] = []
-        keywords_str = c.get("keywords", "")
-        if keywords_str:
-            # Handle stringified lists like "['a', 'b']"
-            if keywords_str.startswith("[") and keywords_str.endswith("]"):
-                keywords_str = keywords_str[1:-1]
-            
-            # Split by comma
-            parts = keywords_str.split(",")
-            
-            for p in parts:
-                # Clean up quotes and whitespace
-                clean_p = p.strip().replace("'", "").replace('"', "")
-                if clean_p:
-                    tags.append(clean_p)
+        # Tags from pre-calculated field (industry + skills)
+        tags = c.get("tags", [])
 
         # Description from CSV
         summary = c.get("description_clean", "No description available for this course.")
