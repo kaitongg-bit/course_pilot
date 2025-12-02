@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# ChromaDB (will be created at runtime)
+backend/chroma_db/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node
+node_modules/
+frontend/react_ui/node_modules/
+frontend/react_ui/build/
+
+# Models (too large for container)
+models/
+*.gguf
+
+# Documentation
+*.md
+!DEPLOYMENT.md
+
+# Chrome extension
+chrome/
+frontend/
+
+# Misc
+.DS_Store
+*.log
+demo.MOV
+images/
