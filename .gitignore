@@ -81,3 +81,5 @@ outputs/
 # llama.cpp/、qwen/
 llama.cpp/
 Qwen/
+backend/chroma_db/
+backend/.env

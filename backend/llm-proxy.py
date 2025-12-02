@@ -32,7 +32,7 @@ CORS(app)  # Enable CORS for Chrome Extension
 # ---------------------------------------------------------------------
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-GROQ_MODEL = "llama-3.1-70b-versatile"  # Fast and powerful
+GROQ_MODEL = "llama-3.3-70b-versatile"  # Stable general model
 PORT = int(os.environ.get("PORT", 8080))  # Cloud Run compatibility
 
 # Vector search weights
@@ -116,9 +116,10 @@ def ingest_courses_to_vector_db():
             
             courses.append(row)
             documents.append(doc_text)
-            ids.append(str(course_id))
+            # Use row index as unique ID to avoid duplicates in CSV
+            ids.append(f"row_{idx}")
             
-            # Store metadata for filtering
+            # Store metadata for filtering (keep original course_id in metadata)
             metadatas.append({
                 "course_id": course_id,
                 "course_name": row.get("course_name", ""),
@@ -447,18 +448,22 @@ def hybrid_search(query: str, user_schedule: Dict[str, set], top_k: int = 20) ->
     
     scored_courses = []
     
-    for i, course_id in enumerate(results['ids'][0]):
+    
+    for i, row_id in enumerate(results['ids'][0]):
+        # Get the actual course_id from metadata (ChromaDB ID is now row_X)
+        actual_course_id = results['metadatas'][0][i].get('course_id', '')
+        
         # Get vector similarity score (ChromaDB returns distances, convert to similarity)
         vector_score = 1.0 - results['distances'][0][i]  # Cosine distance -> similarity
         
-        # Get keyword score
-        kw_score = keyword_score(query, course_id)
+        # Get keyword score using actual course_id
+        kw_score = keyword_score(query, actual_course_id)
         
         # Hybrid score
         final_score = (vector_score * VECTOR_WEIGHT) + (kw_score * KEYWORD_WEIGHT)
         
-        # Get full course data
-        course = COURSES_BY_ID.get(course_id)
+        # Get full course data using actual course_id
+        course = COURSES_BY_ID.get(actual_course_id)
         if not course:
             continue
         
@@ -506,22 +511,27 @@ def generate_course_summary(course: Dict[str, Any], user_profile: Dict[str, Any]
         return course.get("description_clean") or course.get("description") or "No description available."
     
     try:
-        prompt = f"""Based on the user profile and course information below, generate a brief, engaging course recommendation in English (maximum 50 words).
-Use a lively, enthusiastic tone. Output ONLY the recommendation text, no explanations or labels.
+        prompt = f"""Based on the user profile and course information below, generate a personalized course recommendation (max 60 words).
 
-User Career Goals: {user_profile.get("career_goals", "Not specified")}
+STRICT RULES:
+1. Do NOT start with "Unlock", "Discover", "Elevate", "Take your...", or "This course...".
+2. Do NOT use marketing fluff or clichés.
+3. Start directly with WHY this course fits the user's specific goals or skills.
+4. Be conversational but professional.
+5. Output ONLY the recommendation text.
+
+User Goals: {user_profile.get("career_goals", "Not specified")}
 User Skills: {", ".join(user_profile.get("skills", [])) if user_profile.get("skills") else "Not specified"}
-Course Name: {course.get("course_name", "")}
-Course Industry: {course.get("industry", "General")}
-Course Description: {course.get("description_clean") or course.get("description", "")}
+Course: {course.get("course_name", "")}
+Description: {course.get("description_clean") or course.get("description", "")}
 
-Generate a personalized recommendation in English:"""
+Recommendation:"""
         
         chat_completion = groq_client.chat.completions.create(
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a helpful course advisor. Generate brief, engaging course recommendations."
+                    "content": "You are a concise, practical career advisor. You give direct, personalized advice without marketing jargon."
                 },
                 {
                     "role": "user",
@@ -530,16 +540,15 @@ Generate a personalized recommendation in English:"""
             ],
             model=GROQ_MODEL,
             temperature=0.7,
-            max_tokens=100,
+            max_tokens=300,  # Increased to prevent cutoff
         )
         
         summary = chat_completion.choices[0].message.content.strip()
         
-        # Clean up
-        if '\n' in summary:
-            summary = summary.split('\n')[0]
-        summary = summary[:150].strip()
-        
+        # Clean up quotes if present
+        if summary.startswith('"') and summary.endswith('"'):
+            summary = summary[1:-1]
+            
         return summary
     
     except Exception as e:
