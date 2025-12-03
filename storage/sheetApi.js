@@ -2,7 +2,7 @@
 
 // 配置常量
 const SHEET_CONFIG = {
-    scriptUrl: 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec', // 需要替换为实际的Google Apps Script URL
+    scriptUrl: 'https://script.google.com/macros/s/AKfycbzNPXIkV94kFCUk7hAxsg0xlva3QgrvHdqjuLNwgu48ILWvJmt72wiv5YXSPb7QcUIPvw/exec', // 需要替换为实际的Google Apps Script URL
     sheetId: 'YOUR_GOOGLE_SHEET_ID', // 需要替换为实际的Google Sheet ID
     sheetName: 'Reviews'
 };

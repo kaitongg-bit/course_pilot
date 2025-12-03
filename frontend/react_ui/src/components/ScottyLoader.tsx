@@ -27,9 +27,8 @@ export function ScottyLoader() {
                 key={i}
                 className="absolute left-1/2 top-1/2 w-0.5 h-2 rounded-full bg-[#D00000]"
                 style={{
-                  transform: `translate(-50%, -50%) rotate(${
-                    i * 30
-                  }deg) translateY(-14px)`,
+                  transform: `translate(-50%, -50%) rotate(${i * 30
+                    }deg) translateY(-14px)`,
                   opacity: 1 - i * 0.08,
                 }}
               />

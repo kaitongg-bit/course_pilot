@@ -30,6 +30,18 @@ export function CourseCard({ course, onViewMore }: CourseCardProps) {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
   const [isLoadingReviews, setIsLoadingReviews] = useState(false);
+  const [showCopied, setShowCopied] = useState(false);
+
+  const handleCopyCourseNumber = async () => {
+    const courseNumber = course.course_id || course.number || "Unknown ID";
+    try {
+      await navigator.clipboard.writeText(courseNumber);
+      setShowCopied(true);
+      setTimeout(() => setShowCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy course number:", err);
+    }
+  };
 
   const handleViewMore = async () => {
     if (isExpanded) {
@@ -87,8 +99,19 @@ export function CourseCard({ course, onViewMore }: CourseCardProps) {
     <div className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow">
 
       <div className="flex items-start justify-between mb-3">
-        <div>
-          <h3 className="text-[#CC0033] font-semibold">{courseNumber}</h3>
+        <div className="relative">
+          <h3
+            onClick={handleCopyCourseNumber}
+            className="text-[#CC0033] font-semibold cursor-pointer hover:text-[#AA0028] transition-colors select-none"
+            title="点击复制课程号"
+          >
+            {courseNumber}
+          </h3>
+          {showCopied && (
+            <span className="absolute -top-8 left-0 bg-[#10B981] text-white text-xs px-3 py-1 rounded-lg shadow-lg animate-fade-in">
+              已复制!
+            </span>
+          )}
           <p className="text-[#2E2E2E] text-sm mt-1">{courseTitle}</p>
         </div>
       </div>
