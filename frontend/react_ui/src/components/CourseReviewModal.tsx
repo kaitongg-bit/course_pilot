@@ -106,6 +106,12 @@ export function CourseReviewModal({ course, onClose }: CourseReviewModalProps) {
   };
 
   const toggleLike = async (reviewId: string) => {
+    const emailHash = localStorage.getItem('emailHash');
+    if (!emailHash) {
+      alert("Please sign in to like reviews.");
+      return;
+    }
+
     const isCurrentlyLiked = likedReviews.has(reviewId);
 
     // 乐观更新 UI
@@ -129,7 +135,6 @@ export function CourseReviewModal({ course, onClose }: CourseReviewModalProps) {
     }));
 
     try {
-      const emailHash = localStorage.getItem('emailHash') || "";
       const postData = {
         action: "toggle_like",
         RowID: reviewId,
@@ -231,15 +236,14 @@ export function CourseReviewModal({ course, onClose }: CourseReviewModalProps) {
                   <button
                     onClick={() => toggleLike(review.id)}
                     className={`flex items-center gap-1 px-3 py-1 rounded-full transition-colors cursor-pointer ${likedReviews.has(review.id)
-                      ? 'bg-[#A60000] hover:bg-[#8B0000]'
-                      : 'bg-[#F5F5F5] hover:bg-[#E5E7EB]'
+                        ? 'text-green-600 bg-green-50 font-medium'
+                        : 'bg-[#F5F5F5] hover:bg-[#E5E7EB] text-[#2E2E2E]'
                       }`}
                   >
-                    <ThumbsUp className={`w-3.5 h-3.5 ${likedReviews.has(review.id) ? 'fill-white text-white' : 'text-[#6B7280]'
+                    <ThumbsUp className={`w-3.5 h-3.5 ${likedReviews.has(review.id) ? 'fill-current' : 'text-[#6B7280]'
                       }`} />
-                    <span className={`text-xs ${likedReviews.has(review.id) ? 'text-white' : 'text-[#2E2E2E]'
-                      }`}>
-                      {likedReviews.has(review.id) ? review.likes + 1 : review.likes}
+                    <span className="text-xs">
+                      {review.likes}
                     </span>
                   </button>
                 </div>

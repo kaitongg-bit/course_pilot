@@ -104,11 +104,15 @@ export function SearchSection({ onViewCourse }: SearchSectionProps) {
   };
 
   const handleLike = async (reviewId: string, currentLikes: number, currentIsLiked: boolean) => {
+    const emailHash = localStorage.getItem('emailHash');
+    if (!emailHash) {
+      alert("Please sign in to like reviews.");
+      return;
+    }
+
     // 乐观更新 UI
     setReviews(prev => prev.map(r => {
       if (r.id === reviewId) {
-        // 如果之前是 liked，现在就是 unliked (-1)，反之 (+1)
-        // 但如果后端只支持 toggle，我们假设它会成功切换
         const newIsLiked = !currentIsLiked;
         const newLikes = newIsLiked ? currentLikes + 1 : Math.max(0, currentLikes - 1);
         return { ...r, likes: newLikes, isLiked: newIsLiked };
@@ -117,14 +121,12 @@ export function SearchSection({ onViewCourse }: SearchSectionProps) {
     }));
 
     try {
-      const emailHash = localStorage.getItem('emailHash') || "";
       const postData = {
         action: "toggle_like",
         RowID: reviewId,
         EmailHash: emailHash
       };
 
-      // 恢复原始 fetch 逻辑，不使用 credentials: 'omit'
       const resp = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -134,7 +136,7 @@ export function SearchSection({ onViewCourse }: SearchSectionProps) {
       const result = await resp.json();
 
       if (result.success) {
-        // 更新点赞状态和数量
+        // 后端确认成功，使用后端返回的最新数据更新
         setReviews(prev => prev.map(r => {
           if (r.id === reviewId) {
             return {
@@ -147,7 +149,7 @@ export function SearchSection({ onViewCourse }: SearchSectionProps) {
         }));
       } else {
         console.error("Like failed:", result.error);
-        // 回滚 UI
+        // 失败回滚
         setReviews(prev => prev.map(r => {
           if (r.id === reviewId) {
             return { ...r, likes: currentLikes, isLiked: currentIsLiked };
@@ -159,7 +161,7 @@ export function SearchSection({ onViewCourse }: SearchSectionProps) {
 
     } catch (e) {
       console.error("Like failed:", e);
-      // 回滚 UI
+      // 网络错误回滚
       setReviews(prev => prev.map(r => {
         if (r.id === reviewId) {
           return { ...r, likes: currentLikes, isLiked: currentIsLiked };
@@ -242,10 +244,14 @@ export function SearchSection({ onViewCourse }: SearchSectionProps) {
                     <span>{review.semester}</span>
                     <span>•</span>
                     <button
-                      onClick={() => handleLike(review.id, review.likes)}
-                      className="flex items-center gap-1 hover:text-green-600 transition-colors"
+                      onClick={() => handleLike(review.id, review.likes, review.isLiked)}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-full transition-colors ${review.isLiked
+                          ? 'text-green-600 bg-green-50 font-medium'
+                          : 'text-gray-500 hover:text-green-600 hover:bg-gray-50'
+                        }`}
                     >
-                      <ThumbsUp className="w-3 h-3" /> {review.likes}
+                      <ThumbsUp className={`w-3 h-3 ${review.isLiked ? 'fill-current' : ''}`} />
+                      {review.likes}
                     </button>
                   </div>
                   <button
