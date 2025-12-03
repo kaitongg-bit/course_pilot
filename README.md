@@ -2,6 +2,8 @@
 
 Course Pilot is a Chrome extension that helps students plan their courses using an AI-powered assistant. It integrates with the **Groq API** (Llama 3) to provide fast and intelligent course recommendations, scheduling assistance, and review analysis.
 
+> **📚 Note:** For comprehensive documentation, including architecture diagrams, deployment guides, and detailed feature explanations, please refer to the [`docs/`](docs/) directory.
+
 ## Demo
 
 [Watch the Demo Video](demo.MOV)
@@ -97,11 +99,17 @@ The frontend is built with React and Vite.
 1.  Ensure the **Backend Server** is running (`python backend/llm-proxy.py`).
 2.  Click the **Course Pilot** icon in your Chrome toolbar.
 3.  Open the side panel to access the AI Course Planner.
-4.  **Features:**
-    -   **Chat:** Ask for course recommendations based on your goals and skills (Powered by Groq Llama 3).
-    -   **Time Selector:** Filter courses by your available schedule.
-    -   **Reviews:** View and contribute course reviews.
+4.  **Key Capabilities:**
+    -   **🔍 Intelligent Course Matching (Hybrid RAG):** Uses **ChromaDB** for vector search to semantically match your goals and skills with course descriptions, combined with **Groq (Llama 3)** to refine recommendations. This Hybrid RAG approach ensures you find courses that truly fit your career path.
+    -   **📝 AI Course Summarization:** Instantly generates concise summaries of complex course descriptions. The AI analyzes the syllabus and reviews to highlight key learning outcomes and workload.
+    -   **✅ Review Audit & Quality Control:** Ensures high-quality community contributions. The AI automatically audits submitted reviews for relevance and helpfulness before they are published.
+    -   **📅 Smart Scheduling:** Filter courses by your available time slots to build a conflict-free schedule.
 
-## Documentation
+## 📚 Detailed Documentation
 
-For more detailed documentation, architecture diagrams, and legacy instructions, please check the `docs/` folder.
+Please check the [`docs/`](docs/) folder for in-depth guides:
+
+-   [**Architecture Overview**](docs/ARCHITECTURE.md)
+-   [**Hybrid RAG Explained**](docs/HYBRID_RAG_EXPLAINED.md)
+-   [**Deployment Guide**](docs/DEPLOYMENT.md)
+-   [**Refactoring Summary**](docs/REFACTORING_SUMMARY.md)
