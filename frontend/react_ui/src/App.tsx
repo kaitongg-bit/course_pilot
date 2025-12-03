@@ -56,8 +56,48 @@ export default function App() {
     setModalOpen(true);
   };
 
-  const handleAddReview = (review: UserReview) => {
+  const handleAddReview = async (review: UserReview) => {
+    // 先添加到本地 state（立即显示）
     setUserReviews([review, ...userReviews]);
+
+    // 然后提交到 Google Sheets
+    try {
+      const API_URL = 'https://script.google.com/macros/s/AKfycbzNPXIkV94kFCUk7hAxsg0xlva3QgrvHdqjuLNwgu48ILWvJmt72wiv5YXSPb7QcUIPvw/exec';
+
+      const emailHash = localStorage.getItem('emailHash') || '';
+
+      const postData = {
+        action: 'create',
+        UserID: emailHash || 'Anonymous',
+        course_id: review.courseNumber,
+        course_name: review.courseTitle || '',
+        Workload: review.workload?.replace(' hours/week', '') || '',
+        Workflow: review.workflow || '',
+        InterestRating: review.interestRating || 3,
+        UtilityRating: review.utilityRating || 3,
+        OverallRating: review.rating,
+        Comment: review.comment,
+        EmailHash: emailHash
+      };
+
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(postData)
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        console.error('Failed to submit to Google Sheets:', result.error);
+        alert('Warning: Review saved locally but failed to sync to cloud. Error: ' + (result.error || 'Unknown'));
+      } else {
+        console.log('Successfully submitted to Google Sheets');
+      }
+    } catch (error) {
+      console.error('Error submitting to Google Sheets:', error);
+      alert('Warning: Review saved locally but failed to sync to cloud.');
+    }
   };
 
   const handleSignIn = () => {

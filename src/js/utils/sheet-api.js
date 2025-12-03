@@ -2,12 +2,12 @@
 class SheetAPI {
     constructor() {
         // 从ARCHITECTURE.md中获取的真实Apps Script端点
-        this.baseUrl = 'https://script.google.com/macros/s/AKfycbzSK-r_07kUIi26xWSBUOf2c3JwdPLXVJK5RajPkM_uj2jZCzjQqp5F-xh8iQ28gNsD7Q/exec';
-        
+        this.baseUrl = 'https://script.google.com/macros/s/AKfycbzNPXIkV94kFCUk7hAxsg0xlva3QgrvHdqjuLNwgu48ILWvJmt72wiv5YXSPb7QcUIPvw/exec';
+
         // 生成匿名用户ID
         this.userId = this.generateUserId();
     }
-    
+
     // 生成匿名用户ID
     generateUserId() {
         let userId = localStorage.getItem('cmu_user_id');
@@ -17,47 +17,50 @@ class SheetAPI {
         }
         return userId;
     }
-    
+
     // 提交评价到Google Sheets
-  async submitReview(reviewData) {
-    try {
-        // 验证必填字段
-        if (!reviewData.course_id || !reviewData.workload || !reviewData.Comment) {
-            throw new Error("缺少必填字段: course_id, workload, Comment");
+    async submitReview(reviewData) {
+        try {
+            // 验证必填字段
+            if (!reviewData.course_id || !reviewData.workload || !reviewData.Comment) {
+                throw new Error("缺少必填字段: course_id, workload, Comment");
+            }
+
+            // 构造 payload，完全使用用户传入的数据
+            const payload = {
+                action: 'create',     // 必须添加 action: 'create'
+                UserID: this.userId,  // 系统生成的匿名ID
+                course_id: reviewData.course_id,
+                course_name: reviewData.course_name || "",
+                Workload: reviewData.workload,      // 改为大写 Workload
+                Workflow: reviewData.workflow || 3, // 添加 Workflow
+                InterestRating: reviewData.InterestRating || 3,
+                UtilityRating: reviewData.UtilityRating || 3,
+                OverallRating: reviewData.OverallRating || 3,
+                Comment: reviewData.Comment,
+                EmailHash: reviewData.EmailHash || "",
+                RowID: reviewData.RowID || Math.random().toString(36).substr(2, 9),
+                Timestamp: new Date().toISOString()
+            };
+
+            const response = await fetch(this.baseUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                throw new Error(`提交失败: ${response.status}`);
+            }
+
+            return { success: true, data: await response.json() };
+        } catch (error) {
+            console.error('提交评价失败:', error);
+            return { success: false, error: error.message };
         }
-
-        // 构造 payload，完全使用用户传入的数据
-        const payload = {
-            UserID: this.userId,  // 系统生成的匿名ID
-            course_id: reviewData.course_id,
-            workload: reviewData.workload,
-            InterestRating: reviewData.InterestRating || 3,  // 提供默认评分
-            UtilityRating: reviewData.UtilityRating || 3,
-            OverallRating: reviewData.OverallRating || 3,
-            Comment: reviewData.Comment,
-            EmailHash: reviewData.EmailHash || "",  // 允许为空
-            RowID: reviewData.RowID || Math.random().toString(36).substr(2, 9),
-            Timestamp: new Date().toISOString()
-        };
-
-        const response = await fetch(this.baseUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            throw new Error(`提交失败: ${response.status}`);
-        }
-
-        return { success: true, data: await response.json() };
-    } catch (error) {
-        console.error('提交评价失败:', error);
-        return { success: false, error: error.message };
     }
-}
 
-    
+
     // 获取所有评价（公开数据）
     async getReviews(courseId = null) {
         try {
@@ -66,15 +69,15 @@ class SheetAPI {
             if (courseId) {
                 params.append('course_id', courseId);
             }
-            
+
             const response = await fetch(`${this.baseUrl}?${params}`, {
                 method: 'GET'
             });
-            
+
             if (!response.ok) {
                 throw new Error(`获取评价失败: ${response.status}`);
             }
-            
+
             const reviews = await response.json();
             return { success: true, data: reviews };
         } catch (error) {
@@ -82,7 +85,7 @@ class SheetAPI {
             return { success: true, data: [] };
         }
     }
-    
+
     // 删除用户自己的评价（通过哈希验证）
     async deleteReview(reviewData) {
         try {
@@ -91,7 +94,7 @@ class SheetAPI {
                 user_id: this.userId,
                 review_hash: reviewData.review_hash
             };
-            
+
             const response = await fetch(this.baseUrl, {
                 method: 'POST',
                 headers: {
@@ -99,11 +102,11 @@ class SheetAPI {
                 },
                 body: JSON.stringify(payload)
             });
-            
+
             if (!response.ok) {
                 throw new Error(`删除失败: ${response.status}`);
             }
-            
+
             const result = await response.json();
             return { success: true, data: result };
         } catch (error) {
@@ -111,22 +114,22 @@ class SheetAPI {
             return { success: false, error: error.message };
         }
     }
-    
+
     // 获取用户自己的评价
     async getUserReviews() {
         try {
             const params = new URLSearchParams();
             params.append('action', 'query_user');
             params.append('user_id', this.userId);
-            
+
             const response = await fetch(`${this.baseUrl}?${params}`, {
                 method: 'GET'
             });
-            
+
             if (!response.ok) {
                 throw new Error(`获取用户评价失败: ${response.status}`);
             }
-            
+
             const reviews = await response.json();
             return { success: true, data: reviews };
         } catch (error) {
