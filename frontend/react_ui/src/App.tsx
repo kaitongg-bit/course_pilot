@@ -44,6 +44,13 @@ export default function App() {
       "openContribute",
       handleOpenContribute,
     );
+
+    // 检查本地存储以恢复登录状态
+    const storedHash = localStorage.getItem('emailHash');
+    if (storedHash) {
+      setIsLoggedIn(true);
+    }
+
     return () =>
       window.removeEventListener(
         "openContribute",
@@ -57,10 +64,7 @@ export default function App() {
   };
 
   const handleAddReview = async (review: UserReview) => {
-    // 先添加到本地 state（立即显示）
-    setUserReviews([review, ...userReviews]);
-
-    // 然后提交到 Google Sheets
+    // 提交到 Google Sheets
     try {
       const API_URL = 'https://script.google.com/macros/s/AKfycbzNPXIkV94kFCUk7hAxsg0xlva3QgrvHdqjuLNwgu48ILWvJmt72wiv5YXSPb7QcUIPvw/exec';
 
@@ -80,6 +84,7 @@ export default function App() {
         EmailHash: emailHash
       };
 
+      // 恢复原始 fetch 逻辑，不使用 credentials: 'omit'
       const response = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -93,7 +98,9 @@ export default function App() {
         alert('Warning: Review saved locally but failed to sync to cloud. Error: ' + (result.error || 'Unknown'));
       } else {
         console.log('Successfully submitted to Google Sheets');
+        alert('Review submitted successfully!');
       }
+
     } catch (error) {
       console.error('Error submitting to Google Sheets:', error);
       alert('Warning: Review saved locally but failed to sync to cloud.');
@@ -106,7 +113,8 @@ export default function App() {
 
   const handleSignOut = () => {
     setIsLoggedIn(false);
-    setUserReviews([]);
+    localStorage.removeItem('email');
+    localStorage.removeItem('emailHash');
   };
 
   return (
@@ -127,7 +135,6 @@ export default function App() {
         {activeTab === "profile" && (
           <ContributorProfile
             isLoggedIn={isLoggedIn}
-            userReviews={userReviews}
             onSignIn={handleSignIn}
             onSignOut={handleSignOut}
           />

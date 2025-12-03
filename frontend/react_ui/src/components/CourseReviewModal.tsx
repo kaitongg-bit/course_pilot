@@ -14,12 +14,13 @@ interface CourseReviewModalProps {
 }
 
 interface Review {
-  id: number;
+  id: string;
   author: string;
   semester: string;
   rating: number;
   text: string;
   likes: number;
+  isLiked: boolean; // 新增
   workload: string;
   workflow: string;
   interest: number;
@@ -27,8 +28,8 @@ interface Review {
 }
 
 export function CourseReviewModal({ course, onClose }: CourseReviewModalProps) {
-  const [expandedReview, setExpandedReview] = useState<number | null>(null);
-  const [likedReviews, setLikedReviews] = useState<Set<number>>(new Set());
+  const [expandedReview, setExpandedReview] = useState<string | null>(null);
+  const [likedReviews, setLikedReviews] = useState<Set<string>>(new Set());
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -44,41 +45,51 @@ export function CourseReviewModal({ course, onClose }: CourseReviewModalProps) {
           return;
         }
 
-        // 和旧版本保持一致，加上 action=search
         const url = `${API_URL}?action=search&course_id=${encodeURIComponent(courseId)}`;
         console.log('Fetching reviews from:', url);
 
-        // 添加 credentials: 'omit' 防止发送 Cookie，避免多账号重定向
         const response = await fetch(url, {
           redirect: 'follow',
           credentials: 'omit'
         });
 
-        // 检查是否被重定向到了登录页面
         if (response.url.includes('accounts.google.com') || response.url.includes('/u/')) {
-          console.error('Redirected to Google Login or wrong account:', response.url);
           throw new Error('Browser redirected request. Please check your Google login status.');
         }
 
         const data = await response.json();
-
         console.log('Reviews response:', data);
 
         if (data.success && Array.isArray(data.data)) {
-          // 转换 Google Sheets 数据格式为组件需要的格式
-          const formattedReviews = data.data.map((r: any, idx: number) => ({
-            id: idx,
-            author: r.UserID || 'Anonymous',
-            semester: r.Timestamp ? new Date(r.Timestamp).toLocaleDateString() : 'Unknown',
-            rating: r.OverallRating || 3,
-            text: r.Comment || '',
-            likes: r.LikeCount || 0,
-            workload: r.Workload ? `${r.Workload} hours/week` : 'Not specified',
-            workflow: r.Workflow || 'Not specified',
-            interest: r.InterestRating || 3,
-            utility: r.UtilityRating || 3
-          }));
+          const currentUserHash = localStorage.getItem('emailHash') || '';
+          const initialLikedReviews = new Set<string>();
+
+          const formattedReviews = data.data.map((r: any) => {
+            const rowId = r.RowID || Math.random().toString();
+            const likedBy = r.LikedBy || r.LikeBy || '';
+            const isLiked = currentUserHash ? likedBy.includes(currentUserHash) : false;
+
+            if (isLiked) {
+              initialLikedReviews.add(rowId);
+            }
+
+            return {
+              id: rowId,
+              author: r.UserID || 'Anonymous',
+              semester: r.Timestamp ? new Date(r.Timestamp).toLocaleDateString() : 'Unknown',
+              rating: Number(r.OverallRating) || 3,
+              text: r.Comment || '',
+              likes: Number(r.LikeCount) || 0,
+              isLiked: isLiked,
+              workload: r.Workload ? `${r.Workload} hours/week` : 'Not specified',
+              workflow: r.Workflow || 'Not specified',
+              interest: Number(r.InterestRating) || 3,
+              utility: Number(r.UtilityRating) || 3
+            };
+          });
+
           setReviews(formattedReviews);
+          setLikedReviews(initialLikedReviews);
         }
       } catch (error) {
         console.error('Failed to load reviews from Google Sheets:', error);
@@ -90,11 +101,14 @@ export function CourseReviewModal({ course, onClose }: CourseReviewModalProps) {
     fetchReviews();
   }, [course]);
 
-  const toggleDetails = (reviewId: number) => {
+  const toggleDetails = (reviewId: string) => {
     setExpandedReview(expandedReview === reviewId ? null : reviewId);
   };
 
-  const toggleLike = (reviewId: number) => {
+  const toggleLike = async (reviewId: string) => {
+    const isCurrentlyLiked = likedReviews.has(reviewId);
+
+    // 乐观更新 UI
     setLikedReviews((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(reviewId)) {
@@ -104,6 +118,65 @@ export function CourseReviewModal({ course, onClose }: CourseReviewModalProps) {
       }
       return newSet;
     });
+
+    // 同时更新 reviews 里的 likes 计数
+    setReviews(prev => prev.map(r => {
+      if (r.id === reviewId) {
+        const newLikes = isCurrentlyLiked ? Math.max(0, r.likes - 1) : r.likes + 1;
+        return { ...r, likes: newLikes, isLiked: !isCurrentlyLiked };
+      }
+      return r;
+    }));
+
+    try {
+      const emailHash = localStorage.getItem('emailHash') || "";
+      const postData = {
+        action: "toggle_like",
+        RowID: reviewId,
+        EmailHash: emailHash
+      };
+
+      // 恢复原始 fetch 逻辑，不使用 credentials: 'omit'
+      const resp = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(postData)
+      });
+
+      const result = await resp.json();
+
+      // 如果后端返回成功，更新 UI
+      if (result.success) {
+        // 更新点赞状态和数量
+        setReviews(prev => prev.map(r => {
+          if (r.id === reviewId) {
+            return {
+              ...r,
+              likes: result.new_count, // 使用后端返回的新数量
+              isLiked: result.is_liked // 使用后端返回的点赞状态
+            };
+          }
+          return r;
+        }));
+
+        // 同步更新 likedReviews Set
+        setLikedReviews(prev => {
+          const newSet = new Set(prev);
+          if (result.is_liked) {
+            newSet.add(reviewId);
+          } else {
+            newSet.delete(reviewId);
+          }
+          return newSet;
+        });
+      } else {
+        console.error("Like failed:", result.error);
+        // 回滚 UI (这里简化处理，如果失败可能需要重新 fetch)
+      }
+
+    } catch (e) {
+      console.error("Like failed:", e);
+    }
   };
 
   return (

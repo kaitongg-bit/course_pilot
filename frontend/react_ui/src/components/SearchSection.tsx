@@ -13,6 +13,7 @@ interface Review {
   rating: number;
   text: string;
   likes: number;
+  isLiked: boolean; // 新增：当前用户是否已点赞
   workload: string;
   workflow: string;
   interest: number;
@@ -40,49 +41,51 @@ export function SearchSection({ onViewCourse }: SearchSectionProps) {
     setReviews([]);
 
     try {
-      // 直接调用 Google Sheets API 搜索评论
       const url = `${API_URL}?action=search&course_id=${encodeURIComponent(searchQuery.trim())}`;
       console.log('Searching reviews from URL:', url);
 
-      // 添加 credentials: 'omit' 防止发送 Cookie，避免多账号重定向
       const res = await fetch(url, {
         redirect: 'follow',
         credentials: 'omit'
       });
 
-      // 检查是否被重定向到了登录页面
       if (res.url.includes('accounts.google.com') || res.url.includes('/u/')) {
-        console.error('Redirected to Google Login or wrong account:', res.url);
         throw new Error('Browser redirected request. Please check your Google login status.');
       }
 
-      const text = await res.text(); // 先按文本读取，防止 JSON 解析失败
-      console.log('Raw response text:', text.substring(0, 100) + '...'); // 打印前100个字符
-
+      const text = await res.text();
       let data;
       try {
         data = JSON.parse(text);
       } catch (e) {
-        throw new Error('Invalid JSON response from server. Likely HTML error page.');
+        throw new Error('Invalid JSON response from server.');
       }
 
-      console.log('Search response data:', data);
-
       if (data.success && Array.isArray(data.data)) {
-        const formattedReviews = data.data.map((r: any) => ({
-          id: r.RowID || Math.random().toString(),
-          author: r.UserID || 'Anonymous',
-          semester: r.Timestamp ? new Date(r.Timestamp).toLocaleDateString() : 'Unknown',
-          rating: Number(r.OverallRating) || 3,
-          text: r.Comment || '',
-          likes: Number(r.LikeCount) || 0,
-          workload: r.Workload ? `${r.Workload} hours/week` : 'Not specified',
-          workflow: r.Workflow || 'Not specified',
-          interest: Number(r.InterestRating) || 3,
-          utility: Number(r.UtilityRating) || 3,
-          course_id: r.course_id || '',
-          course_name: r.course_name || ''
-        }));
+        const currentUserHash = localStorage.getItem('emailHash') || '';
+
+        const formattedReviews = data.data.map((r: any) => {
+          // 检查 LikedBy 字段是否包含当前用户的哈希
+          // 假设 LikedBy 是逗号分隔的字符串，或者是 JSON 数组字符串，或者就是包含哈希的长字符串
+          const likedBy = r.LikedBy || r.LikeBy || '';
+          const isLiked = currentUserHash ? likedBy.includes(currentUserHash) : false;
+
+          return {
+            id: r.RowID || Math.random().toString(),
+            author: r.UserID || 'Anonymous',
+            semester: r.Timestamp ? new Date(r.Timestamp).toLocaleDateString() : 'Unknown',
+            rating: Number(r.OverallRating) || 3,
+            text: r.Comment || '',
+            likes: Number(r.LikeCount) || 0,
+            isLiked: isLiked,
+            workload: r.Workload ? `${r.Workload} hours/week` : 'Not specified',
+            workflow: r.Workflow || 'Not specified',
+            interest: Number(r.InterestRating) || 3,
+            utility: Number(r.UtilityRating) || 3,
+            course_id: r.course_id || '',
+            course_name: r.course_name || ''
+          };
+        });
         setReviews(formattedReviews);
       } else {
         setReviews([]);
@@ -98,6 +101,73 @@ export function SearchSection({ onViewCourse }: SearchSectionProps) {
 
   const toggleDetails = (reviewId: string) => {
     setExpandedReview(expandedReview === reviewId ? null : reviewId);
+  };
+
+  const handleLike = async (reviewId: string, currentLikes: number, currentIsLiked: boolean) => {
+    // 乐观更新 UI
+    setReviews(prev => prev.map(r => {
+      if (r.id === reviewId) {
+        // 如果之前是 liked，现在就是 unliked (-1)，反之 (+1)
+        // 但如果后端只支持 toggle，我们假设它会成功切换
+        const newIsLiked = !currentIsLiked;
+        const newLikes = newIsLiked ? currentLikes + 1 : Math.max(0, currentLikes - 1);
+        return { ...r, likes: newLikes, isLiked: newIsLiked };
+      }
+      return r;
+    }));
+
+    try {
+      const emailHash = localStorage.getItem('emailHash') || "";
+      const postData = {
+        action: "toggle_like",
+        RowID: reviewId,
+        EmailHash: emailHash
+      };
+
+      // 恢复原始 fetch 逻辑，不使用 credentials: 'omit'
+      const resp = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(postData)
+      });
+
+      const result = await resp.json();
+
+      if (result.success) {
+        // 更新点赞状态和数量
+        setReviews(prev => prev.map(r => {
+          if (r.id === reviewId) {
+            return {
+              ...r,
+              likes: result.new_count,
+              isLiked: result.is_liked
+            };
+          }
+          return r;
+        }));
+      } else {
+        console.error("Like failed:", result.error);
+        // 回滚 UI
+        setReviews(prev => prev.map(r => {
+          if (r.id === reviewId) {
+            return { ...r, likes: currentLikes, isLiked: currentIsLiked };
+          }
+          return r;
+        }));
+        alert("Like failed: " + (result.error || "Unknown error"));
+      }
+
+    } catch (e) {
+      console.error("Like failed:", e);
+      // 回滚 UI
+      setReviews(prev => prev.map(r => {
+        if (r.id === reviewId) {
+          return { ...r, likes: currentLikes, isLiked: currentIsLiked };
+        }
+        return r;
+      }));
+      alert("Network error liking review.");
+    }
   };
 
   return (
@@ -171,9 +241,12 @@ export function SearchSection({ onViewCourse }: SearchSectionProps) {
                   <div className="flex items-center gap-2 text-xs text-[#6B7280]">
                     <span>{review.semester}</span>
                     <span>•</span>
-                    <span className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleLike(review.id, review.likes)}
+                      className="flex items-center gap-1 hover:text-green-600 transition-colors"
+                    >
                       <ThumbsUp className="w-3 h-3" /> {review.likes}
-                    </span>
+                    </button>
                   </div>
                   <button
                     onClick={() => toggleDetails(review.id)}
