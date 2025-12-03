@@ -118,9 +118,9 @@ export function ChatTab({ onViewCourse }: ChatTabProps) {
   return (
     <div className="h-full flex flex-col bg-[#F5F5F5]">
       {/* Top banner / header is handled by parent; this is the inner card */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-0">
         <div className="bg-white rounded-2xl shadow-sm border border-[#FFBF24]/60 p-1">
-          <div className="px-6 pt-5 pb-3 flex items-center gap-3">
+          <div className="px-4 pt-5 pb-3 flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-[#FFE8B3] flex items-center justify-center">
               <span className="text-lg">🎯</span>
             </div>
@@ -131,7 +131,7 @@ export function ChatTab({ onViewCourse }: ChatTabProps) {
             </div>
           </div>
 
-          <div className="px-6 pb-6 space-y-5">
+          <div className="px-4 pb-6 space-y-5">
             {/* Target Career */}
             <div>
               <label className="block text-sm text-[#2E2E2E] mb-2.5">
