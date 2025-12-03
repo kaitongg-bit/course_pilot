@@ -24,18 +24,17 @@ interface Review {
 export function SearchSection({ onViewCourse }: SearchSectionProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [hasSearched, setHasSearched] = useState(false);
-  const [isSearching, setIsSearching] = useState(false); // Kept for compatibility if needed, but isLoading is main
+  const [isSearching, setIsSearching] = useState(false);
   const [reviews, setReviews] = useState<Review[]>([]);
-  const [expandedReview, setExpandedReview] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expandedReview, setExpandedReview] = useState<string | null>(null);
 
   const API_URL = 'https://script.google.com/macros/s/AKfycbzNPXIkV94kFCUk7hAxsg0xlva3QgrvHdqjuLNwgu48ILWvJmt72wiv5YXSPb7QcUIPvw/exec';
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
 
-    setIsLoading(true);
+    setIsSearching(true);
     setHasSearched(true);
     setError(null);
     setReviews([]);
@@ -76,23 +75,13 @@ export function SearchSection({ onViewCourse }: SearchSectionProps) {
           semester: r.Timestamp ? new Date(r.Timestamp).toLocaleDateString() : 'Unknown',
           rating: Number(r.OverallRating) || 3,
           text: r.Comment || '',
-          likes: r.LikeCount || 0,
+          likes: Number(r.LikeCount) || 0,
           workload: r.Workload ? `${r.Workload} hours/week` : 'Not specified',
           workflow: r.Workflow || 'Not specified',
-          interest: r.InterestRating || 3,
-          utility: r.UtilityRating || 3,
-          // Raw data
-          RowID: r.RowID,
-          course_id: r.course_id,
-          course_name: r.course_name,
-          Workload: r.Workload,
-          Workflow: r.Workflow,
-          InterestRating: r.InterestRating,
-          UtilityRating: r.UtilityRating,
-          OverallRating: r.OverallRating,
-          Comment: r.Comment,
-          LikeCount: r.LikeCount,
-          Timestamp: r.Timestamp
+          interest: Number(r.InterestRating) || 3,
+          utility: Number(r.UtilityRating) || 3,
+          course_id: r.course_id || '',
+          course_name: r.course_name || ''
         }));
         setReviews(formattedReviews);
       } else {
@@ -101,130 +90,129 @@ export function SearchSection({ onViewCourse }: SearchSectionProps) {
 
     } catch (err) {
       console.error("Search error:", err);
-      setError("Failed to load reviews. Please check your network connection or try again.");
-      setReviews([]);
+      setError("Failed to load reviews. Please check your network connection.");
     } finally {
-      setIsLoading(false);
+      setIsSearching(false);
     }
   };
 
-  const toggleReview = (index: number) => {
-    setExpandedReview(expandedReview === index ? null : index);
+  const toggleDetails = (reviewId: string) => {
+    setExpandedReview(expandedReview === reviewId ? null : reviewId);
   };
 
   return (
-    <div className="h-full flex flex-col bg-[#F5F5F5]">
-      {/* Search Header */}
-      <div className="bg-white p-6 shadow-sm z-10">
-        <h2 className="text-2xl font-bold text-[#2E2E2E] mb-6">Search Course Reviews</h2>
-        <div className="flex gap-3">
-          <div className="relative flex-1">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              placeholder="Enter course ID (e.g., 15-112)"
-              className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#CC0033] focus:border-transparent transition-all"
-            />
-            <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+    <div className="space-y-4 h-full flex flex-col">
+      {/* Search Card */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm flex-shrink-0">
+        <h2 className="text-[#2E2E2E] mb-4 font-bold text-lg">Search Course Reviews</h2>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm text-[#6B7280] mb-2">
+              Search by Course Number
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                placeholder="e.g., 15-445"
+                className="flex-1 px-4 py-2 bg-[#F5F5F5] rounded-xl border border-[#E5E7EB] focus:outline-none focus:ring-2 focus:ring-[#CC0033] text-[#2E2E2E]"
+              />
+              <button
+                onClick={handleSearch}
+                disabled={isSearching}
+                className="bg-[#CC0033] hover:bg-[#AA0028] text-white px-6 py-2 rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSearching ? <ScottyLoader /> : <Search className="w-5 h-5" />}
+              </button>
+            </div>
           </div>
-          <button
-            onClick={handleSearch}
-            disabled={isLoading}
-            className="bg-[#CC0033] hover:bg-[#AA0028] text-white px-6 py-2 rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoading ? <ScottyLoader /> : <Search className="w-5 h-5" />}
-          </button>
         </div>
       </div>
 
-      {/* Results Area */}
-      <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-        <div className="space-y-4 max-w-3xl mx-auto">
-          {error && (
-            <div className="bg-red-50 text-red-600 p-4 rounded-xl flex items-center gap-3 border border-red-100">
-              <AlertCircle className="w-5 h-5 flex-shrink-0" />
-              <p>{error}</p>
-            </div>
-          )}
+      {/* Search Results */}
+      <div className="flex-1 overflow-y-auto space-y-3 min-h-0">
+        {hasSearched && (
+          <>
+            {error && (
+              <div className="text-red-600 text-sm bg-red-50 p-3 rounded-xl border border-red-100">
+                {error}
+              </div>
+            )}
 
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-12 text-gray-500 bg-white rounded-2xl border border-dashed border-gray-300">
-              <ScottyLoader />
-              <p className="mt-3">Searching for reviews...</p>
-            </div>
-          ) : !error && reviews.length === 0 && hasSearched ? (
-            <div className="text-gray-500 text-center py-8 bg-white rounded-2xl border border-dashed border-gray-300">
-              No reviews found for "{searchQuery}". <br />
-              Try searching for another course ID (e.g., 15-112).
-            </div>
-          ) : (
-            reviews.map((review, index) => (
-              <div key={index} className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200">
+            {!error && reviews.length === 0 && !isSearching && (
+              <div className="text-gray-500 text-center py-8 bg-white rounded-2xl border border-dashed border-gray-300">
+                No reviews found for "{searchQuery}". <br />
+                Try searching for another course ID (e.g., 15-112).
+              </div>
+            )}
+
+            {reviews.map((review) => (
+              <div key={review.id} className="bg-white rounded-2xl p-4 border border-[#E5E7EB] shadow-sm">
                 {/* Review Header */}
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#E8F0FE] flex items-center justify-center">
-                      <span className="text-[#1967D2] font-bold text-sm">
-                        A
-                      </span>
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-[#2E2E2E] text-sm">Anonymous Student</h4>
-                      <p className="text-xs text-gray-500">{review.semester}</p>
-                    </div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex flex-col">
+                    <span className="font-semibold text-[#CC0033]">{review.course_id}</span>
+                    <span className="text-xs text-[#6B7280]">{review.course_name}</span>
                   </div>
-                  <div className="flex items-center gap-1 bg-[#FFF8E1] px-2 py-1 rounded-lg">
-                    <Star className="w-4 h-4 fill-[#FBBF24] text-[#FBBF24]" />
-                    <span className="font-bold text-[#B45309] text-sm">{review.rating}/5</span>
+                  <div className="flex items-center gap-1 bg-yellow-50 px-2 py-1 rounded-lg">
+                    <span className="text-sm font-bold text-[#B45309]">{review.rating}</span>
+                    <Star className="w-3 h-3 fill-[#FBBF24] text-[#FBBF24]" />
                   </div>
                 </div>
 
-                {/* Review Content */}
-                <div className="mb-4">
-                  <p className="text-[#4B5563] text-sm leading-relaxed whitespace-pre-wrap">
-                    {review.text}
-                  </p>
+                {/* Review Text */}
+                <p className="text-sm text-[#2E2E2E] mb-3 leading-relaxed">{review.text}</p>
+
+                {/* Footer & Details Toggle */}
+                <div className="flex items-center justify-between pt-3 border-t border-[#E5E7EB]">
+                  <div className="flex items-center gap-2 text-xs text-[#6B7280]">
+                    <span>{review.semester}</span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1">
+                      <ThumbsUp className="w-3 h-3" /> {review.likes}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => toggleDetails(review.id)}
+                    className="flex items-center gap-1 text-xs text-[#CC0033] hover:text-[#800000] transition-colors font-medium"
+                  >
+                    <span>{expandedReview === review.id ? 'Hide Details' : 'Show Details'}</span>
+                    {expandedReview === review.id ? (
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    )}
+                  </button>
                 </div>
 
-                {/* Review Stats Grid - Expandable */}
-                <button
-                  onClick={() => toggleReview(index)}
-                  className="flex items-center gap-2 text-sm text-[#CC0033] font-medium hover:text-[#AA0028] transition-colors mb-2"
-                >
-                  {expandedReview === index ? 'Hide Details' : 'Show Details'}
-                  <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${expandedReview === index ? 'rotate-180' : ''}`} />
-                </button>
-
-                {expandedReview === index && (
-                  <div className="grid grid-cols-2 gap-3 bg-gray-50 p-4 rounded-xl animate-in slide-in-from-top-2 duration-200 border border-gray-100">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Workload</span>
-                      <span className="text-sm text-gray-700 font-medium">{review.workload}</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Workflow</span>
-                      <span className="text-sm text-gray-700 font-medium">{review.workflow}</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Interest</span>
-                      <div className="flex items-center gap-1">
-                        <span className="text-sm text-gray-700 font-medium">{review.interest}/5</span>
+                {/* Expanded Details */}
+                {expandedReview === review.id && (
+                  <div className="mt-3 pt-3 border-t border-[#E5E7EB] space-y-2 bg-gray-50 p-3 rounded-xl">
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-[#6B7280] block mb-1">Workload</span>
+                        <span className="font-medium text-[#2E2E2E]">{review.workload}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#6B7280] block mb-1">Workflow</span>
+                        <span className="font-medium text-[#2E2E2E]">{review.workflow}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#6B7280] block mb-1">Interest</span>
                         <div className="flex gap-0.5">
                           {[...Array(5)].map((_, i) => (
-                            <div key={i} className={`w-1.5 h-1.5 rounded-full ${i < review.interest ? 'bg-[#CC0033]' : 'bg-gray-200'}`} />
+                            <Star key={i} className={`w-3 h-3 ${i < review.interest ? 'fill-[#FBBF24] text-[#FBBF24]' : 'text-[#E5E7EB]'}`} />
                           ))}
                         </div>
                       </div>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Utility</span>
-                      <div className="flex items-center gap-1">
-                        <span className="text-sm text-gray-700 font-medium">{review.utility}/5</span>
+                      <div>
+                        <span className="text-[#6B7280] block mb-1">Utility</span>
                         <div className="flex gap-0.5">
                           {[...Array(5)].map((_, i) => (
-                            <div key={i} className={`w-1.5 h-1.5 rounded-full ${i < review.utility ? 'bg-[#1967D2]' : 'bg-gray-200'}`} />
+                            <Star key={i} className={`w-3 h-3 ${i < review.utility ? 'fill-[#FBBF24] text-[#FBBF24]' : 'text-[#E5E7EB]'}`} />
                           ))}
                         </div>
                       </div>
@@ -232,9 +220,9 @@ export function SearchSection({ onViewCourse }: SearchSectionProps) {
                   </div>
                 )}
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </>
+        )}
       </div>
     </div>
   );

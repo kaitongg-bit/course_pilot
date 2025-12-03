@@ -37,17 +37,13 @@ export function CourseReviewModal({ course, onClose }: CourseReviewModalProps) {
   // 从 Google Sheets 加载评论
   useEffect(() => {
     const fetchReviews = async () => {
-      const courseId = course.course_id || course.number || '';
-      if (!isOpen || !courseId) {
-        setReviews([]); // Clear reviews if modal is closed or no courseId
-        setLoading(false); // Ensure loading is false if not fetching
-        return;
-      }
-
-      setLoading(true);
-      setReviews([]); // Clear old data when fetching new reviews
-
       try {
+        const courseId = course.course_id || course.number || '';
+        if (!courseId) {
+          setLoading(false);
+          return;
+        }
+
         // 和旧版本保持一致，加上 action=search
         const url = `${API_URL}?action=search&course_id=${encodeURIComponent(courseId)}`;
         console.log('Fetching reviews from:', url);
@@ -72,7 +68,7 @@ export function CourseReviewModal({ course, onClose }: CourseReviewModalProps) {
           // 转换 Google Sheets 数据格式为组件需要的格式
           const formattedReviews = data.data.map((r: any, idx: number) => ({
             id: idx,
-            author: r.UserID || 'Anonymous', // Keep original author logic for now, will be overridden in JSX
+            author: r.UserID || 'Anonymous',
             semester: r.Timestamp ? new Date(r.Timestamp).toLocaleDateString() : 'Unknown',
             rating: r.OverallRating || 3,
             text: r.Comment || '',
@@ -80,32 +76,19 @@ export function CourseReviewModal({ course, onClose }: CourseReviewModalProps) {
             workload: r.Workload ? `${r.Workload} hours/week` : 'Not specified',
             workflow: r.Workflow || 'Not specified',
             interest: r.InterestRating || 3,
-            utility: r.UtilityRating || 3,
-            // Store raw data for easier access in new JSX structure
-            UserID: r.UserID,
-            Timestamp: r.Timestamp,
-            OverallRating: r.OverallRating,
-            Comment: r.Comment,
-            Workload: r.Workload,
-            Workflow: r.Workflow,
-            InterestRating: r.InterestRating,
-            UtilityRating: r.UtilityRating,
-            LikeCount: r.LikeCount,
+            utility: r.UtilityRating || 3
           }));
           setReviews(formattedReviews);
-        } else {
-          setReviews([]);
         }
       } catch (error) {
         console.error('Failed to load reviews from Google Sheets:', error);
-        setReviews([]);
       } finally {
         setLoading(false);
       }
     };
 
     fetchReviews();
-  }, [isOpen, course.course_id, course.number]); // Added isOpen and specific course properties as dependencies
+  }, [course]);
 
   const toggleDetails = (reviewId: number) => {
     setExpandedReview(expandedReview === reviewId ? null : reviewId);
@@ -123,21 +106,24 @@ export function CourseReviewModal({ course, onClose }: CourseReviewModalProps) {
     });
   };
 
-  if (!isOpen) return null; // Only render if isOpen is true
-
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col animate-in fade-in zoom-in duration-200">
-
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl w-full max-w-md max-h-[80vh] overflow-hidden shadow-2xl">
         {/* Header */}
-        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-blue-50 to-white rounded-t-xl">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-800">{course.number || course.course_id} Reviews</h2>
-            <p className="text-gray-500 text-sm mt-1">Real student experiences</p>
+        <div className="p-6 border-b border-[#E5E7EB] flex items-start justify-between">
+          <div className="flex-1">
+            <h2 className="text-[#A60000] mb-1">
+              {course.number}
+            </h2>
+            <p className="text-[#2E2E2E] text-sm">{course.title}</p>
+            <div className="flex items-center gap-1 mt-2">
+              <Star className="w-4 h-4 fill-[#FBBF24] text-[#FBBF24]" />
+              <span className="text-sm text-[#2E2E2E]">{course.rating} Average Rating</span>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            className="text-[#6B7280] hover:text-[#2E2E2E] p-1 rounded-lg hover:bg-[#F5F5F5] transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
