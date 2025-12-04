@@ -6,7 +6,7 @@ Course Pilot is a Chrome extension that helps students plan their courses using 
 
 ## Demo
 
-[Watch the Demo Video](demo.MOV)
+[Watch the Demo Video](https://drive.google.com/file/d/1rzGv-1oy6SGLpXwtV4WQSSGE0rwLv0oo/view?usp=share_link) 
 
 ## Prerequisites
 
